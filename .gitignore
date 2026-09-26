@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+.env.local
+node_modules/
+.next/
+*.pt
+runs/
+data/clips/*
+data/cache/*
+!data/clips/.gitkeep
+!data/cache/.gitkeep
