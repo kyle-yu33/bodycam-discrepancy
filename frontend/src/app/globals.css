@@ -1,4 +1,23 @@
 @import "tailwindcss";
+.source-options { display:flex; gap:20px; border:0; padding:0; margin:0 0 16px; }
+.source-options legend { font-weight:bold; margin-bottom:12px; }
+.source-options label { display:flex; align-items:center; gap:6px; cursor:pointer; }
+.youtube-input { background:white; padding:20px; border:1px solid var(--line); border-radius:8px; margin-bottom:12px; }
+.youtube-input label { display:block; font-weight:bold; margin-bottom:8px; }
+.youtube-input input { display:block; width:100%; border:1px solid #b5c9b9; padding:10px; border-radius:5px; margin-top:8px; }
+.range-input { display:flex; flex-wrap:wrap; gap:16px; margin-top:16px; }
+.range-input label { flex:1; min-width:120px; }
+.report-input { background:white; padding:22px; border:1px solid #dfe5e0; border-radius:9px; margin-bottom:16px; }
+.report-input label { display:block; font-weight:bold; margin-bottom:8px; }
+.report-input textarea { width:100%; padding:12px; border:1px solid #b5c9b9; border-radius:6px; font:inherit; resize:vertical; }
+.report-text { white-space:pre-wrap; margin-top:16px; }
+.claim-review-grid { display:grid; grid-template-columns:minmax(220px,1fr) minmax(300px,1.4fr) minmax(230px,1fr); gap:16px; align-items:start; }
+blockquote { margin:14px 0; line-height:1.6; }
+.badge { display:inline-block; line-height:1.5; }
+.outside { background:#eee6f5; color:#684484; }
+.frame-times { display:flex; flex-wrap:wrap; gap:8px; }
+.frame-times button { padding:8px; background:#f3f8f1; border:1px solid #b5c9b9; border-radius:5px; }
+@media(max-width:1300px) { .claim-review-grid { grid-template-columns:1fr; } }
 :root {
   --ink:#182a2a;
   --muted:#72807d;

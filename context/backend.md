@@ -2,6 +2,13 @@
 
 ## Purpose
 
+**Current implementation:** The claim-driven prototype retains Python FastAPI and
+Pydantic with `POST /analyses` (`report_text` plus either multipart `video` or
+`youtube_url` with `start_seconds`/`end_seconds` for a 1–90 second excerpt), background
+jobs, and `GET /analyses/{id}/result`. It implements the claim/review domain below;
+the TypeScript service interfaces, mock default, Next.js route, and Zod validation
+below are target recommendations. See `decisions.md` for the implementation checkpoint.
+
 The backend exists to turn a report and video into a structured **claim–evidence ledger**. It should be thin, typed, deterministic in demo mode, and safe to replace with a real Gemini integration later.
 
 ## Domain types
@@ -113,8 +120,12 @@ Pass 2 must never output a legal conclusion, a credibility judgment, or a claim 
 
 ## Secrets and data handling
 
-- Gemini API key stays server-side only. It is a Vertex AI (Google Cloud) key named `GOOGLE_API_KEY`, used as `genai.Client(vertexai=True, api_key=...)` with no project/location. The AI Studio endpoint (`generativelanguage.googleapis.com`) does not accept it.
-- The Python scaffold reads it from `backend/.env`; the Next.js target should use `.env.local`. Never commit either.
+- Gemini API key stays server-side only.
+- Use `.env.local`, never commit it.
 - Include `.env.example` with variable names only.
 - Do not accept or upload non-public case evidence in the MVP.
-- Only send footage that is already publicly released. Vertex AI has no Files API, so clips go inline in each request (keep them short; the scaffold rejects clips over 15 MB).
+- Only use footage that is already publicly released. Vertex AI has no Files API, so short video clips are sent inline; clips above 15 MB are rejected.
+
+## YouTube video input
+
+The prototype accepts a public YouTube URL with a 1–90 second excerpt range. `yt-dlp` downloads the excerpt in the background. No browser cookies are used. Result metadata preserves the source URL and excerpt offset; evidence timestamps remain relative to the downloaded excerpt.

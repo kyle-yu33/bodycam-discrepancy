@@ -1,63 +1,85 @@
-"""Full recording -> overlapping clips -> candidates -> merge -> detailed review."""
-import json
+"""Report -> exact claims -> relevant windows -> bounded visual reviews."""
 from pathlib import Path
 from . import video
 from .gemini import Gemini, MODEL
-from .schema import Candidate, Detection, Event, Result
+from .schema import Claim, EvidenceReview, EvidenceWindow, ExtractedClaims, Result
 
-def absolute(detection: Detection, offset: float, length: float) -> Detection:
-    if detection.start_sec > length or detection.end_sec > length:
-        raise ValueError("Gemini returned a timestamp outside the clip")
-    return detection.model_copy(update={"start_sec": detection.start_sec + offset, "end_sec": detection.end_sec + offset})
 
-def merge(detections: list[tuple[Detection, int]]) -> list[Candidate]:
-    merged: list[Candidate] = []
-    for event, index in sorted(detections, key=lambda item: (item[0].event_type, item[0].start_sec)):
-        previous = merged[-1] if merged else None
-        if previous and previous.event_type == event.event_type and event.start_sec <= previous.end_sec:
-            previous.end_sec = max(previous.end_sec, event.end_sec)
-            previous.source_clips = sorted(set(previous.source_clips + [index]))
-            if event.description not in previous.description:
-                previous.description += " / " + event.description
-        else:
-            merged.append(Candidate(**event.model_dump(), id="", source_clips=[index]))
-    merged.sort(key=lambda event: event.start_sec)
-    for i, event in enumerate(merged):
-        event.id = f"event-{i+1}"
-    return merged
+def source_claims(report: str, extracted: ExtractedClaims) -> list[Claim]:
+    """Reject invented/paraphrased quotes and assign IDs outside the model."""
+    claims = []
+    cursor = 0
+    for i, item in enumerate(extracted.claims):
+        start = report.find(item.reportText, cursor)
+        if start < 0:
+            raise ValueError("Extracted claim is not an exact, ordered report excerpt")
+        end = start + len(item.reportText)
+        claims.append(Claim(**{**item.model_dump(),
+            "assessableByVideo": item.category == "visual" and item.assessableByVideo},
+            id=f"claim-{i+1}", order=i+1, reportStart=start, reportEnd=end))
+        cursor = end
+    return claims
 
-def run(original: Path, folder: Path, job_id: str, filename: str, progress) -> Result:
-    progress("Preprocessing full recording", 0.03)
-    video.duration(original)
-    normalized = folder / "video.mp4"
-    video.normalize(original, normalized)
-    duration = video.duration(normalized)
-    clips = video.windows(duration)
-    clip_dir = folder / "clips"
-    clip_dir.mkdir(exist_ok=True)
+
+def abstain(claim: Claim, reason: str, outside: bool = False) -> EvidenceReview:
+    return EvidenceReview(claimId=claim.id,
+        status="outside_automated_assessment" if outside else "insufficient_footage_to_assess",
+        observations=[], frameTimes=[], uncertaintyReason=reason)
+
+
+def run(original: Path, folder: Path, job_id: str, filename: str, report_text: str, progress) -> Result:
+    progress("Checking demo clip", .03)
+    duration = video.duration(original)
+    # Encoded audio/container duration can extend a cut by a few milliseconds.
+    if duration > 90.1:
+        raise ValueError("Use a demo excerpt of at most 90 seconds")
     gemini = Gemini()
     try:
-        detections = []
-        for clip in clips:
-            progress(f"Detecting candidates · clip {clip.index+1}/{len(clips)}", 0.1 + .45 * clip.index / len(clips))
-            path = clip_dir / f"{clip.index}.mp4"
-            video.cut(normalized, path, clip.start_sec, clip.end_sec)
-            found = gemini.detect(path, clip.end_sec - clip.start_sec)
-            detections.extend((absolute(event, clip.start_sec, clip.end_sec - clip.start_sec), clip.index) for event in found.events)
-        progress("Merging overlapping detections", .56)
-        candidates = merge(detections)
-        (folder / "candidates.json").write_text(json.dumps([c.model_dump() for c in candidates], indent=2))
-        events = []
-        for i, candidate in enumerate(candidates):
-            progress(f"Detailed review · event {i+1}/{len(candidates)}", .6 + .35*i/len(candidates))
-            start = max(0, candidate.start_sec-10)
-            end = min(duration, candidate.end_sec+10)
-            path = clip_dir / f"{candidate.id}.mp4"
-            video.cut(normalized, path, start, end)
-            detail = gemini.detail(path, candidate, start, end)
-            events.append(Event(**candidate.model_dump(), detail=detail,
-                clip_url=f"/media/{job_id}/clips/{path.name}", context_start_sec=start, context_end_sec=end))
-        return Result(id=job_id, filename=filename, duration_sec=duration, video_url=f"/media/{job_id}/video.mp4",
-            original_url=f"/media/{job_id}/{original.name}", model=MODEL, clips=clips, candidates=candidates, events=events)
+        progress("Extracting report claims and eligibility", .08)
+        claims = source_claims(report_text, gemini.extract(report_text))
+        progress("Preparing evidence video", .15)
+        normalized = folder / "video.mp4"
+        video.normalize(original, normalized)
+        duration = video.duration(normalized)
+        clip_dir = folder / "clips"
+        clip_dir.mkdir(exist_ok=True)
+        reviews = []
+
+        # Prepare the inline video once and reuse it for each localization request.
+        def review_claims(full_video=None):
+            for i, claim in enumerate(claims):
+                progress(f"Reviewing claim {i+1}/{len(claims)}", .2 + .75*i/len(claims))
+                if not claim.assessableByVideo:
+                    reviews.append(abstain(claim,
+                        f"This {claim.category.replace('_', ' ')} claim is outside automated visual assessment.", outside=True))
+                    continue
+                located = gemini.locate(full_video, claim, duration)
+                if located.window is None:
+                    reviews.append(abstain(claim,
+                        f"Unable to locate relevant footage: {located.reason} Absence from footage does not establish that the event did not happen."))
+                    continue
+                if located.window.endSeconds > duration:
+                    raise ValueError("Localization is outside the original recording")
+                # Include context, especially for temporal claims such as 'before'.
+                start = max(0, located.window.startSeconds - 2)
+                end = min(duration, located.window.endSeconds + 2)
+                path = clip_dir / f"{claim.id}.mp4"
+                video.cut(normalized, path, start, end)
+                detail = gemini.review(path, claim, end - start)
+                if any(t > end - start for t in detail.frameTimes):
+                    raise ValueError("Grounding returned a frame outside the supplied clip")
+                reviews.append(EvidenceReview(**{**detail.model_dump(),
+                    "frameTimes": sorted(set(t + start for t in detail.frameTimes))},
+                    claimId=claim.id, evidenceWindow=EvidenceWindow(startSeconds=start, endSeconds=end),
+                    localizationReason=located.reason, clip_url=f"/media/{job_id}/clips/{path.name}"))
+
+        if any(c.assessableByVideo for c in claims):
+            with gemini.video_file(normalized) as full_video:
+                review_claims(full_video)
+        else:
+            review_claims()
+        return Result(id=job_id, filename=filename, report_text=report_text,
+            duration_sec=duration, video_url=f"/media/{job_id}/video.mp4",
+            original_url=f"/media/{job_id}/{original.name}", model=MODEL, claims=claims, reviews=reviews)
     finally:
         gemini.close()

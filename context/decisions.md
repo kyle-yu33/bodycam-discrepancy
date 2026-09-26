@@ -18,7 +18,34 @@ This log records the core decisions that define EvidenceLens. Update it when the
 | Use cached/mock demo analysis by default. | Live API latency, quotas, Wi-Fi, and model variance can ruin the demo. | Label mocked/cached analysis honestly; offer live rerun only as optional. |
 | Position against JusticeText carefully. | JusticeText clearly overlaps in bodycam review, documents, timelines, and inconsistency workflows. | Never claim it cannot analyze footage or definitively lacks vision AI; use public-documentation wording. |
 
-## Current open questions
+## Implementation checkpoint — claim-driven prototype
+
+- Replaced generic event detection with exact report-claim extraction, eligibility,
+  claim-guided localization, and narrow visual grounding. Missing windows produce
+  `Insufficient footage to assess`; non-visual claims skip visual model calls.
+- Retain FastAPI, Pydantic, background jobs, FFmpeg, and the Next.js client during
+  this iteration. `POST /analyses` accepts `video` and `report_text`; it returns a
+  job, with claims/reviews available from the result endpoint. Next.js route handlers
+  and Zod remain a proposed architecture, not a prerequisite for the product workflow.
+- Live analysis currently accepts short demo excerpts (at most 90 seconds). The
+  existing upload control is a local development input for public demo media,
+  not the proposed final arbitrary-evidence upload product.
+- Results now use pipeline version `2`. Existing version `1` event results are
+  retained on disk and return an explicit re-analysis message when opened.
+- The seeded public case, in-app source attribution, and default mock/cached demo
+  path are still outstanding. This checkpoint is not completion of the MVP.
+
+## YouTube evidence input
+
+- Added YouTube links as an alternative to local files, using a selected 1–90 second
+  excerpt and the same report-driven analysis pipeline. `yt-dlp` and FFmpeg import
+  the excerpt in the existing background worker. No browser cookies are used.
+- Persist the source URL/title and excerpt start offset. Evidence times stay local
+  to the excerpt for player seeking; the UI identifies the offset and links back
+  to the matching YouTube moment. This supports public demo footage, not private
+  case material. Users must still select an appropriate official release.
+
+## Open execution questions
 
 - Which teammate owns frontend/UI, backend/integration, demo-data/video, and pitch/README?
 - Which current Gemini Flash model and API quota are actually available to the team account?

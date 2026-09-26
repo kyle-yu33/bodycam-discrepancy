@@ -1,5 +1,23 @@
-export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+// Keep this API contract aligned with backend/app/schema.py.
 export interface Job { id: string; filename: string; status: "queued" | "processing" | "complete" | "failed"; stage: string; progress: number; error: string | null; created_at: string }
-export interface Candidate { id: string; event_type: string; start_sec: number; end_sec: number; description: string; source_clips: number[] }
-export interface Event extends Candidate { detail: { status: "retained" | "uncertain" | "dismissed"; description: string; observations: string[]; uncertainty: string[]; confidence: "low" | "medium" | "high" }; clip_url: string; context_start_sec: number; context_end_sec: number }
-export interface Result { id: string; filename: string; duration_sec: number; video_url: string; original_url: string; model: string; pipeline_version: string; clips: {index: number; start_sec: number; end_sec: number}[]; candidates: Candidate[]; events: Event[] }
+export type ClaimCategory = "visual" | "audio" | "documentary" | "subjective_or_legal";
+export type ReviewStatus = "consistent_with_visible_evidence" | "potential_visual_inconsistency_review_recommended" | "insufficient_footage_to_assess" | "outside_automated_assessment";
+export interface Claim { id: string; order: number; reportText: string; category: ClaimCategory; assessableByVideo: boolean; reportStart: number; reportEnd: number }
+export interface EvidenceWindow { startSeconds: number; endSeconds: number }
+export interface EvidenceReview {
+  claimId: string;
+  status: ReviewStatus;
+  evidenceWindow: EvidenceWindow | null;
+  observations: string[];
+  uncertaintyReason: string | null;
+  frameTimes: number[];
+  localizationReason: string | null;
+  clip_url: string | null;
+  humanReviewRequired: true;
+}
+export interface Result {
+  id: string; filename: string; report_text: string; duration_sec: number;
+  video_url: string; original_url: string; model: string;
+  source_url?: string | null; source_title?: string | null; source_start_seconds?: number;
+  pipeline_version: "2"; mode: "live"; claims: Claim[]; reviews: EvidenceReview[];
+}

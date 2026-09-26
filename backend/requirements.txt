@@ -4,3 +4,4 @@ python-multipart
 python-dotenv
 pydantic>=2
 google-genai
+yt-dlp[default]>=2025.11.12

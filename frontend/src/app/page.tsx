@@ -1,10 +1,18 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { API_BASE, type Job, type Result, type Event } from "@/lib/types";
+import { API_BASE, type Job, type Result, type Claim, type ReviewStatus } from "@/lib/types";
 
 const time = (s: number) => `${Math.floor(s / 60).toString().padStart(2, "0")}:${(s % 60).toFixed(1).padStart(4, "0")}`;
-const label = (s: string) => s.replaceAll("_", " ");
+const statuses: Record<ReviewStatus, { label: string; color: string }> = {
+  consistent_with_visible_evidence: { label: "Consistent with visible evidence", color: "retained" },
+  potential_visual_inconsistency_review_recommended: { label: "Potential visual inconsistency — review recommended", color: "uncertain" },
+  insufficient_footage_to_assess: { label: "Insufficient footage to assess", color: "dismissed" },
+  outside_automated_assessment: { label: "Outside automated assessment", color: "outside" },
+};
+function Badge({ status }: { status: ReviewStatus }) {
+  return <span className={`badge ${statuses[status].color}`}>{statuses[status].label}</span>;
+}
 async function api<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(API_BASE + path, options);
   if (!response.ok) {
@@ -18,77 +26,136 @@ export default function Home() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [job, setJob] = useState<Job | null>(null);
   const [result, setResult] = useState<Result | null>(null);
-  const [selected, setSelected] = useState<Event | null>(null);
+  const [selected, setSelected] = useState<Claim | null>(null);
   const [file, setFile] = useState<File | null>(null);
+  const [sourceMode, setSourceMode] = useState<"file" | "youtube">("file");
+  const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [startSeconds, setStartSeconds] = useState("0");
+  const [endSeconds, setEndSeconds] = useState("60");
+  const [report, setReport] = useState("");
   const [error, setError] = useState("");
+  const [videoError, setVideoError] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [filter, setFilter] = useState("active");
   const player = useRef<HTMLVideoElement>(null);
   const active = useRef<string | null>(null);
+  const pendingSeek = useRef<number | null>(null);
+  const review = result?.reviews.find(item => item.claimId === selected?.id);
 
   useEffect(() => { api<Job[]>("/analyses").then(setJobs).catch(e => setError(e.message)); }, []);
   useEffect(() => {
     if (!job || job.status === "complete" || job.status === "failed") return;
     const id = job.id;
     let stopped = false;
+    let fetching = false;
     const timer = setInterval(async () => {
+      if (fetching) return;
+      fetching = true;
       try {
         const next = await api<Job>(`/analyses/${id}`);
         if (stopped || active.current !== id) return;
         const data = next.status === "complete" ? await api<Result>(`/analyses/${id}/result`) : null;
         if (stopped || active.current !== id) return;
-        if (data) setResult(data);
+        if (data) { setResult(data); setVideoError(false); }
         setJob(next);
         setJobs(previous => previous.map(item => item.id === id ? next : item));
-      } catch (e) { if (!stopped) setError((e as Error).message); }
+      } catch (e) { if (!stopped && active.current === id) setError((e as Error).message); }
+      finally { fetching = false; }
     }, 2000);
     return () => { stopped = true; clearInterval(timer); };
   }, [job]);
 
   async function open(item: Job) {
     active.current = item.id;
-    setJob(item); setResult(null); setSelected(null); setError("");
+    pendingSeek.current = null;
+    setJob(item); setResult(null); setSelected(null); setError(""); setVideoError(false);
     try {
       if (item.status === "complete") {
         const data = await api<Result>(`/analyses/${item.id}/result`);
         if (active.current === item.id) setResult(data);
       }
-    } catch (e) { setError((e as Error).message); }
+    } catch (e) { if (active.current === item.id) setError((e as Error).message); }
   }
+  const validRange = startSeconds.trim() !== "" && endSeconds.trim() !== "" &&
+    Number.isFinite(Number(startSeconds)) && Number.isFinite(Number(endSeconds)) &&
+    Number(startSeconds) >= 0 && Number(endSeconds) - Number(startSeconds) >= 1 &&
+    Number(endSeconds) - Number(startSeconds) <= 90;
+  const hasSource = sourceMode === "file" ? !!file : !!youtubeUrl.trim() && validRange;
   async function upload() {
-    if (!file) return;
+    if (!hasSource || !report.trim()) return;
     setUploading(true); setError("");
     try {
-      const form = new FormData(); form.append("video", file);
+      const form = new FormData();
+      if (sourceMode === "file" && file) form.append("video", file);
+      else {
+        form.append("youtube_url", youtubeUrl.trim());
+        form.append("start_seconds", startSeconds);
+        form.append("end_seconds", endSeconds);
+      }
+      form.append("report_text", report);
       const next = await api<Job>("/analyses", { method: "POST", body: form });
       setJobs(previous => [next, ...previous]); await open(next);
     } catch (e) { setError((e as Error).message); }
     finally { setUploading(false); }
   }
-  function select(event: Event) {
-    setSelected(event);
-    if (player.current) { player.current.currentTime = Math.max(0, event.start_sec - 2); player.current.play().catch(() => {}); }
+  function seek(seconds: number) {
+    pendingSeek.current = seconds;
+    if (player.current && player.current.readyState >= 1) {
+      player.current.currentTime = seconds;
+      pendingSeek.current = null;
+    }
   }
-  const visible = result?.events.filter(event => filter === "all" || (filter === "active" ? event.detail.status !== "dismissed" : event.detail.status === filter)) ?? [];
+  function select(claim: Claim) {
+    setSelected(claim);
+    player.current?.pause();
+    pendingSeek.current = null;
+    const window = result?.reviews.find(item => item.claimId === claim.id)?.evidenceWindow;
+    if (window) seek(window.startSeconds);
+  }
 
   return <div className="shell">
-    <aside><Link className="brand" href="/">▣ <span>fieldnote<span className="brand-dot">.</span></span></Link><div className="workspace">VIDEO INTELLIGENCE</div>
-      <div className="nav-active">▤ &nbsp; Recording library</div><div className="library-heading">YOUR RECORDINGS <span>{jobs.length}</span></div>
-      <div className="history">{jobs.map(item => <button className={`history-item ${job?.id === item.id ? "chosen" : ""}`} key={item.id} onClick={() => open(item)}><strong>{item.filename}</strong><span>{item.status} · {new Date(item.created_at).toLocaleDateString()}</span></button>)}{!jobs.length && <p className="muted">Your recordings will appear here.</p>}</div>
-      <div className="aside-footer"><span className="live-dot"/> Gemini only <p>Two passes. One evidence timeline.</p></div>
+    <aside><Link className="brand" href="/">EvidenceLens</Link><div className="workspace">CLAIM–EVIDENCE REVIEW</div>
+      <div className="nav-active">Case library</div><div className="library-heading">YOUR ANALYSES <span>{jobs.length}</span></div>
+      <div className="history">{jobs.map(item => <button className={`history-item ${job?.id === item.id ? "chosen" : ""}`} key={item.id} onClick={() => open(item)}><strong>{item.filename}</strong><span>{item.status} · {new Date(item.created_at).toLocaleDateString()}</span></button>)}{!jobs.length && <p className="muted">Your analyses will appear here.</p>}</div>
+      <div className="aside-footer">Human review required<p>Report claims linked to available footage.</p></div>
     </aside>
-    <main><header><span>Workspace <span className="slash">/</span> Recording review</span><span className="pill">MVP · v1.0</span></header>
-      <section className="intro"><div className="eyebrow">FROM FOOTAGE TO FOCUS</div><h1>Find the moments that matter.</h1><p>Detect candidate events, inspect the context, and review the original recording.</p></section>
-      <section className="upload"><div><h2>New recording</h2><p>MP4 or MOV · Original audio included</p></div><label className="file-picker">{file ? file.name : "Choose video"}<input aria-label="Choose bodycam video" type="file" accept=".mp4,.mov,video/mp4,video/quicktime" onChange={e => setFile(e.target.files?.[0] ?? null)}/></label><button className="primary" disabled={!file || uploading} onClick={upload}>{uploading ? "Uploading…" : "Analyze recording ↗"}</button></section>
-      <div className="pipeline"><span>01 &nbsp; Preprocess</span><b>→</b><span>02 &nbsp; Detect candidates</span><b>→</b><span>03 &nbsp; Merge</span><b>→</b><span>04 &nbsp; Detailed review</span></div>
-      {error && <div className="error" role="alert">{error}</div>}
-      {job && !result && <section className="status" aria-live="polite"><h2>{job.filename}</h2><p>{job.stage}</p>{job.status !== "failed" && <progress max={1} value={job.progress}/>}<p>{job.error}</p></section>}
-      {result ? <><div className="review-heading"><div><div className="eyebrow">ANALYSIS COMPLETE</div><h2>{result.filename}</h2></div><span className="muted">{time(result.duration_sec)} duration · {result.clips.length} clips · {result.events.length} candidates</span></div>
-        <div className="review-grid"><section className="video-panel"><video ref={player} src={API_BASE + result.video_url} controls preload="metadata"/><div className="video-caption"><span>Original timeline · normalized playback</span><a href={API_BASE + result.original_url} target="_blank" rel="noreferrer">Open original ↗</a></div>
-          <div className="timeline" aria-label="Event timeline">{result.events.filter(e => e.detail.status !== "dismissed").map(event => <button key={event.id} title={`${label(event.event_type)} · ${time(event.start_sec)}`} aria-label={`Seek to ${label(event.event_type)} at ${time(event.start_sec)}`} onClick={() => select(event)} style={{left: `${event.start_sec/result.duration_sec*100}%`, width: `${Math.max(.7, (event.end_sec-event.start_sec)/result.duration_sec*100)}%`}} />)}</div>
-          {selected ? <div className="detail"><div className="eyebrow">EVENT DETAIL · {time(selected.start_sec)}–{time(selected.end_sec)}</div><h2>{label(selected.event_type)}</h2><p>{selected.detail.description}</p><h3>Observations</h3><ul>{selected.detail.observations.map((o,i) => <li key={i}>{o}</li>)}</ul><h3>Uncertainty</h3>{selected.detail.uncertainty.length ? <ul>{selected.detail.uncertainty.map((o,i) => <li key={i}>{o}</li>)}</ul> : <p>No specific uncertainty reported by the model.</p>}<a href={API_BASE + selected.clip_url} target="_blank" rel="noreferrer">Open context clip ↗</a><p className="muted">Model confidence: {selected.detail.confidence} · {selected.source_clips.length} source clip(s)</p></div> : <div className="detail empty-detail">Select an event to inspect its observations and uncertainty.</div>}
-        </section><section className="events"><div className="events-top"><h2>Detected events <span>{visible.length}</span></h2><select aria-label="Filter events" value={filter} onChange={e => setFilter(e.target.value)}><option value="active">Retained + uncertain</option><option value="retained">Retained</option><option value="uncertain">Uncertain</option><option value="dismissed">Dismissed</option><option value="all">All candidates</option></select></div><div className="event-list">{visible.map(event => <button key={event.id} className={`event-card ${selected?.id === event.id ? "selected" : ""}`} onClick={() => select(event)}><div className="event-meta"><span>{time(event.start_sec)}–{time(event.end_sec)}</span><span className={`badge ${event.detail.status}`}>{event.detail.status}</span></div><h3>{label(event.event_type)}</h3><p>{event.detail.description}</p><span className="review-link">Review moment ↗</span></button>)}{!visible.length && <div className="empty-events">No events in this view.{result.events.length === 0 && <p>Gemini found no matching candidates in this recording.</p>}</div>}</div></section></div>
-        <footer>{result.model} · Pipeline {result.pipeline_version} <a href={API_BASE + `/analyses/${result.id}/result`} target="_blank" rel="noreferrer">View analysis JSON ↗</a></footer></> : !job && <section className="empty"><div className="empty-icon">▷</div><h2>Your review starts here</h2><p>Add a recording to create a timestamped event timeline.<br/>Each candidate gets a second, closer look with Gemini.</p><div className="empty-tags"><span>Overlapping clips</span><span>Detailed observations</span><span>Explicit uncertainty</span></div></section>}
+    <main><header><span>Workspace / Claim review</span><span className="pill">Prototype · Human review required</span></header>
+      <section className="intro"><div className="eyebrow">FROM REPORT TO EVIDENCE</div><h1>Inspect each claim against the footage.</h1><p>This prototype surfaces source-linked review questions. It does not make legal conclusions.</p></section>
+      <section className="report-input"><label htmlFor="report">Team-written incident report</label><p className="muted">Use your demo report and an already-public, non-graphic video excerpt of at most 90 seconds. Do not submit non-public case material.</p><textarea id="report" rows={5} maxLength={12000} value={report} onChange={e => setReport(e.target.value)} placeholder="Paste the report here. Include concrete observations and any claims the system should abstain from assessing."/></section>
+      <section className="source-input">
+        <fieldset className="source-options"><legend>Video evidence</legend>
+          <label><input type="radio" name="source" checked={sourceMode === "file"} onChange={() => setSourceMode("file")}/> Upload file</label>
+          <label><input type="radio" name="source" checked={sourceMode === "youtube"} onChange={() => setSourceMode("youtube")}/> YouTube link</label>
+        </fieldset>
+        {sourceMode === "youtube" && <div className="youtube-input">
+          <label htmlFor="youtube-url">Public YouTube video URL</label>
+          <input id="youtube-url" type="url" maxLength={2048} value={youtubeUrl} onChange={e => setYoutubeUrl(e.target.value)} placeholder="https://www.youtube.com/watch?v=…"/>
+          <div className="range-input"><label htmlFor="start-seconds">Start (seconds)<input id="start-seconds" type="number" min="0" step="0.1" value={startSeconds} onChange={e => setStartSeconds(e.target.value)}/></label><label htmlFor="end-seconds">End (seconds)<input id="end-seconds" type="number" min="1" step="0.1" value={endSeconds} onChange={e => setEndSeconds(e.target.value)}/></label></div>
+          <p className="muted">Choose a 1–90 second excerpt. For example, 120 to 180 imports 02:00–03:00. These fields determine the range, including for links with a timestamp.</p>
+          {!validRange && <p role="alert">Enter a start and end that select between 1 and 90 seconds.</p>}
+        </div>}
+        <div className="upload"><div><h2>Public demo footage</h2><p>{sourceMode === "youtube" ? "Import the selected excerpt from YouTube" : "MP4 or MOV"} · Live Gemini analysis</p></div>
+          {sourceMode === "file" && <label className="file-picker">{file ? file.name : "Choose video"}<input aria-label="Choose public demo video" type="file" accept=".mp4,.mov,video/mp4,video/quicktime" onChange={e => setFile(e.target.files?.[0] ?? null)}/></label>}
+          <button className="primary" disabled={!hasSource || !report.trim() || uploading} onClick={upload}>{uploading ? "Submitting…" : "Analyze report + video"}</button>
+        </div>
+      </section>
+      <div className="pipeline"><span>01 Extract claims</span><b>→</b><span>02 Locate evidence</span><b>→</b><span>03 Ground observations</span><b>→</b><span>04 Human review</span></div>
+      {error && <div className="error" role="alert">{error} {job && <button onClick={() => open(job)}>Reload analysis</button>}</div>}
+      {job && !result && <section className="status" aria-live="polite"><h2>{job.filename}</h2><p>{job.stage}</p>{(job.status === "queued" || job.status === "processing") && <progress max={1} value={job.progress}/>}<p>{job.error}</p>{job.status === "failed" && <p>Correct the inputs above and select Analyze report + video to retry.</p>}</section>}
+      {result ? <><div className="review-heading"><div><div className="eyebrow">LIVE MODEL RESULT · HUMAN REVIEW REQUIRED</div><h2>{result.filename}</h2></div><span className="muted">{time(result.duration_sec)} duration · {result.claims.length} claims</span></div>
+        <div className="claim-review-grid">
+          <section className="events"><div className="events-top"><h2>Report claims</h2><details><summary>View submitted report</summary><p className="report-text">{result.report_text}</p></details></div><div className="event-list">{result.claims.map(claim => {
+            const item = result.reviews.find(r => r.claimId === claim.id);
+            return <button key={claim.id} aria-pressed={selected?.id === claim.id} className={`event-card ${selected?.id === claim.id ? "selected" : ""}`} onClick={() => select(claim)}><span className="muted">Claim {claim.order} · {claim.category.replaceAll("_", " ")}</span><blockquote>{claim.reportText}</blockquote>{item && <Badge status={item.status}/>}</button>;
+          })}</div></section>
+          <section className="video-panel"><video key={result.id} ref={player} src={API_BASE + result.video_url} controls preload="metadata" onError={() => setVideoError(true)} onLoadedMetadata={() => { if (pendingSeek.current !== null) seek(pendingSeek.current); }}/>
+            {videoError && <p className="error">Video unavailable. Evidence references remain available below; restore the local media before reviewing.</p>}
+            <div className="video-caption"><span>{result.source_url ? `Excerpt timestamps · 00:00 = YouTube ${time(result.source_start_seconds ?? 0)}` : "Original recording timestamps"}</span><a href={API_BASE + result.original_url} target="_blank" rel="noreferrer">{result.source_url ? "Open imported excerpt ↗" : "Open original ↗"}</a></div>
+            {result.source_url && <div className="video-caption"><a href={`${result.source_url}&t=${Math.floor((result.source_start_seconds ?? 0) + (review?.evidenceWindow?.startSeconds ?? 0))}s`} target="_blank" rel="noreferrer">YouTube source: {result.source_title ?? result.filename} ↗</a></div>}
+            <div className="timeline" aria-label="Selected claim evidence window">{review?.evidenceWindow && <button aria-label="Seek to selected claim evidence" onClick={() => seek(review.evidenceWindow!.startSeconds)} style={{ left: `${review.evidenceWindow.startSeconds/result.duration_sec*100}%`, width: `${(review.evidenceWindow.endSeconds-review.evidenceWindow.startSeconds)/result.duration_sec*100}%` }}/>}</div>
+            <div className="detail">{review?.evidenceWindow ? <><h3>Evidence window</h3><p>{time(review.evidenceWindow.startSeconds)}–{time(review.evidenceWindow.endSeconds)}</p><p>{review.localizationReason}</p><h3>Source-frame references</h3><div className="frame-times">{review.frameTimes.map(t => <button key={t} onClick={() => seek(t)}>Inspect {time(t)}</button>)}</div>{!review.frameTimes.length && <p>No specific source frames identified.</p>}</> : <p>{selected ? "No evidence window available for this claim. The player shows the original recording only." : "Select a report claim to inspect the relevant footage."}</p>}</div>
+          </section>
+          <section className="events detail" aria-live="polite"><h2>Claim–Evidence Ledger</h2>{selected && review ? <><blockquote>{selected.reportText}</blockquote><Badge status={review.status}/><h3>Visible observations</h3>{review.observations.length ? <ul>{review.observations.map((o, i) => <li key={i}>{o}</li>)}</ul> : <p>No visual assessment made.</p>}<h3>Limitations</h3><p>{review.uncertaintyReason ?? "No specific limitation reported by the model. This is not independent verification."}</p>{review.clip_url && <a href={API_BASE + review.clip_url} target="_blank" rel="noreferrer">Open evidence clip ↗</a>}<p><strong>Human review required.</strong> Absence from footage does not establish that an event did not happen.</p></> : <p>Select a claim to view its evidence review.</p>}</section>
+        </div><footer>{result.model} · Pipeline {result.pipeline_version}<a href={API_BASE + `/analyses/${result.id}/result`} target="_blank" rel="noreferrer">View analysis JSON ↗</a></footer></> : !job && <section className="empty"><h2>Start with the report.</h2><p>Add a team-written report and public demo clip. Each claim gets an evidence review or an explicit abstention.</p></section>}
     </main>
   </div>;
 }

@@ -2,6 +2,10 @@
 
 ## Stack decision
 
+The current claim-driven prototype keeps FastAPI/Pydantic and the existing job
+runner behind the Next.js UI. The consolidated TypeScript stack below remains a
+recommendation; see `decisions.md` for implemented behavior and remaining demo work.
+
 ```text
 Next.js + TypeScript + Tailwind
   + Next.js server-side route handlers

@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 .env
 .env.local
+.env.examples
 node_modules/
 .next/
 *.pt
