@@ -1,6 +1,7 @@
 """Claim-review contracts. Persisted evidence times use the original recording."""
 from typing import Annotated, Literal
 from pydantic import BaseModel, Field, model_validator
+from .transcribe import Transcript
 
 Seconds = Annotated[float, Field(ge=0, allow_inf_nan=False)]
 ClaimCategory = Literal["visual", "audio", "documentary", "subjective_or_legal"]
@@ -107,6 +108,7 @@ class Result(BaseModel):
     mode: Literal["live"] = "live"
     claims: list[Claim]
     reviews: list[EvidenceReview]
+    transcript: Transcript | None = None  # ElevenLabs; None when no key or transcription failed
 
 
 class Job(BaseModel):

@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import TranscriptPanel from "@/components/TranscriptPanel";
 import { API_BASE, type Job, type Result, type Claim, type ReviewStatus } from "@/lib/types";
 
 const time = (s: number) => `${Math.floor(s / 60).toString().padStart(2, "0")}:${(s % 60).toFixed(1).padStart(4, "0")}`;
@@ -126,6 +127,10 @@ export default function Home() {
       return next;
     });
   }
+  function playFrom(seconds: number) {
+    seek(seconds);
+    void player.current?.play();
+  }
   function playEvidenceWindow() {
     if (!review?.evidenceWindow || !player.current) return;
     seek(review.evidenceWindow.startSeconds);
@@ -172,6 +177,7 @@ export default function Home() {
             <div className="video-caption"><span>{result.source_url ? `Excerpt timestamps · 00:00 = YouTube ${time(result.source_start_seconds ?? 0)}` : "Original recording timestamps"}</span><a href={API_BASE + result.original_url} target="_blank" rel="noreferrer">{result.source_url ? "Open imported excerpt ↗" : "Open original ↗"}</a></div>
             {result.source_url && <div className="video-caption"><a href={`${result.source_url}&t=${Math.floor((result.source_start_seconds ?? 0) + (review?.evidenceWindow?.startSeconds ?? 0))}s`} target="_blank" rel="noreferrer">YouTube source: {result.source_title ?? result.filename} ↗</a></div>}
             <div className="timeline" aria-label="Selected claim evidence window">{review?.evidenceWindow && <button aria-label="Seek to selected claim evidence" onClick={() => seek(review.evidenceWindow!.startSeconds)} style={{ left: `${review.evidenceWindow.startSeconds/result.duration_sec*100}%`, width: `${(review.evidenceWindow.endSeconds-review.evidenceWindow.startSeconds)/result.duration_sec*100}%` }}/>}</div>
+            {result.transcript && <TranscriptPanel transcript={result.transcript} video={player} onSeek={playFrom} evidenceWindow={review?.evidenceWindow}/>}
             <div className="detail">{review?.evidenceWindow ? <><h3>Evidence window</h3><p>{time(review.evidenceWindow.startSeconds)}–{time(review.evidenceWindow.endSeconds)}</p><p className="muted">AI-generated locator note: {review.localizationReason} This note helps find footage; it is not a confirmed finding.</p><button className="review-action" onClick={playEvidenceWindow}>▶ Play evidence window</button><h3>Source-frame references</h3><div className="frame-times">{review.frameTimes.map(t => <button key={t} onClick={() => seek(t)}>Inspect {time(t)}</button>)}</div>{!review.frameTimes.length && <p>No specific source frames identified.</p>}</> : <p>{selected ? "No evidence window available for this claim. The player shows the original recording only." : "Select a report claim to inspect the relevant footage."}</p>}</div>
           </section>
           <section className="events detail" aria-live="polite"><h2>Final Conclusion</h2>{selected && review ? <><blockquote>{selected.reportText}</blockquote><h3>Final result</h3>{humanConclusion ? <span className={`badge ${humanConclusion === "supported" ? "retained" : "dismissed"}`}>{humanConclusion === "supported" ? "Sufficient footage" : "Insufficient footage"}</span> : <p className="muted">Pending your review</p>}<h3>AI assessment</h3><Badge status={review.status}/><h3>Visible observations</h3>{review.observations.length ? <ul>{review.observations.map((o, i) => <li key={i}>{o}</li>)}</ul> : <p>No visual assessment made.</p>}{review.clip_url && <a href={API_BASE + review.clip_url} target="_blank" rel="noreferrer">Open evidence clip ↗</a>}<p><strong>Review the footage above, then record your conclusion:</strong></p><div className="human-conclusions" role="group" aria-label="Record your conclusion"><button aria-pressed={humanConclusion === "supported"} onClick={() => setHumanConclusion("supported")}>Supported by footage</button><button aria-pressed={humanConclusion === "insufficient"} onClick={() => setHumanConclusion("insufficient")}>Insufficient footage</button></div>{humanConclusion && <p className="muted">Your conclusion is saved in this browser.</p>}<p><strong>Human review required.</strong> Absence from footage does not establish that an event did not happen.</p></> : <p>Select a claim to view its evidence review.</p>}</section>

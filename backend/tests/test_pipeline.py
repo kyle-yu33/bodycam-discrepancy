@@ -15,6 +15,7 @@ from backend.app.schema import (
     Grounding, Job, Localization, Result,
 )
 from backend.app.pipeline import run, source_claims
+from backend.app.transcribe import Transcript
 
 REPORT = "The person raised both hands. The person stepped backward. The person intended to flee."
 
@@ -61,10 +62,10 @@ class FakeGemini:
         self.closed = True
 
 
-def execute(fake, duration=60):
+def execute(fake, duration=60, elevenlabs_key=""):
     with tempfile.TemporaryDirectory() as folder:
         root = Path(folder)
-        with patch("backend.app.pipeline.video.duration", return_value=duration), patch("backend.app.pipeline.video.normalize"), patch("backend.app.pipeline.video.cut") as cut, patch("backend.app.pipeline.Gemini", return_value=fake):
+        with patch("backend.app.pipeline.video.duration", return_value=duration), patch("backend.app.pipeline.video.normalize"), patch("backend.app.pipeline.video.cut") as cut, patch("backend.app.pipeline.Gemini", return_value=fake), patch.dict(os.environ, {"ELEVENLABS_API_KEY": elevenlabs_key}):
             result = run(root / "original.mp4", root, "test", "public.mp4", REPORT, lambda *args: None)
         return result, cut.call_args_list
 
@@ -75,6 +76,16 @@ class ClaimTests(unittest.TestCase):
         self.assertEqual(len(result.reviews), 3)
         with self.assertRaisesRegex(ValueError, "at most 90 seconds"):
             execute(FakeGemini(), duration=91)
+
+    def test_transcript_is_optional_and_never_blocks_review(self):
+        self.assertIsNone(execute(FakeGemini())[0].transcript)
+        transcript = Transcript(language_code="eng", text="Hands up.", segments=[])
+        with patch("backend.app.pipeline.transcribe", return_value=transcript):
+            self.assertEqual(execute(FakeGemini(), elevenlabs_key="k")[0].transcript, transcript)
+        with patch("backend.app.pipeline.transcribe", side_effect=RuntimeError("API down")), self.assertLogs(level="ERROR"):
+            result, _ = execute(FakeGemini(), elevenlabs_key="k")
+        self.assertIsNone(result.transcript)
+        self.assertEqual(len(result.reviews), 3)
 
     def test_exact_quotes_ids_and_eligibility(self):
         claims = source_claims(REPORT, extraction())

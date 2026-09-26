@@ -1,8 +1,11 @@
 """Report -> exact claims -> relevant windows -> bounded visual reviews."""
+import logging
+import os
 from pathlib import Path
 from . import video
 from .gemini import Gemini, MODEL
 from .schema import Claim, EvidenceReview, EvidenceWindow, ExtractedClaims, Result
+from .transcribe import transcribe
 
 
 def source_claims(report: str, extracted: ExtractedClaims) -> list[Claim]:
@@ -41,6 +44,14 @@ def run(original: Path, folder: Path, job_id: str, filename: str, report_text: s
         normalized = folder / "video.mp4"
         video.normalize(original, normalized)
         duration = video.duration(normalized)
+        transcript = None
+        if os.getenv("ELEVENLABS_API_KEY"):
+            progress("Transcribing audio", .17)
+            try:
+                transcript = transcribe(normalized)
+            except Exception:
+                # The transcript is a review aid; claim review must not depend on it.
+                logging.exception("Transcription failed; continuing without a transcript")
         clip_dir = folder / "clips"
         clip_dir.mkdir(exist_ok=True)
         reviews = []
@@ -78,6 +89,6 @@ def run(original: Path, folder: Path, job_id: str, filename: str, report_text: s
             review_claims()
         return Result(id=job_id, filename=filename, report_text=report_text,
             duration_sec=duration, video_url=f"/media/{job_id}/video.mp4",
-            original_url=f"/media/{job_id}/{original.name}", model=MODEL, claims=claims, reviews=reviews)
+            original_url=f"/media/{job_id}/{original.name}", model=MODEL, claims=claims, reviews=reviews, transcript=transcript)
     finally:
         gemini.close()

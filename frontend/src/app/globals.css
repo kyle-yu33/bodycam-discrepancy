@@ -17,6 +17,19 @@ blockquote { margin:14px 0; line-height:1.6; }
 .outside { background:#eee6f5; color:#684484; }
 .frame-times { display:flex; flex-wrap:wrap; gap:8px; }
 .frame-times button { padding:8px; background:#f3f8f1; border:1px solid #b5c9b9; border-radius:5px; }
+.transcript { border-top:1px solid var(--line); padding:14px 16px; font-size:12px; }
+.transcript-top { display:flex; flex-direction:column; gap:2px; margin-bottom:8px; }
+.transcript-top h3 { font-size:13px; }
+.transcript-top .muted { font-size:10px; }
+.transcript-list { position:relative; max-height:240px; overflow-y:auto; }
+.transcript-line { display:block; width:100%; text-align:left; padding:6px 8px; border-radius:6px; border-left:3px solid transparent; line-height:1.6; color:#9aa6a2; background:none; }
+.transcript-line:hover { background:#f3f6f2; }
+.transcript-line.in-window { border-left-color:#67a78c; }
+.transcript-line.active { background:#e7f1ec; color:#5e6d68; }
+.transcript-meta { display:block; font-size:10px; color:var(--muted); font-variant-numeric:tabular-nums; }
+.word.spoken { color:var(--ink); }
+.word.now { color:var(--green); font-weight:700; }
+.word.sound { font-style:italic; }
 .raw-json { margin:18px 0; padding:16px; background:white; border:1px solid var(--line); border-radius:8px; }
 .raw-json summary { cursor:pointer; color:var(--green); font-weight:bold; }
 .raw-json pre { max-height:600px; overflow:auto; padding:16px; background:#172321; color:#e2eee7; border-radius:6px; font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; white-space:pre; }
