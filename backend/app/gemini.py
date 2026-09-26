@@ -9,6 +9,13 @@ from .schema import Detections, Detail, Candidate
 MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 MAX_INLINE_BYTES = 15 * 1024 * 1024
 
+def video_part(path: Path, fps: float | None = None) -> types.Part:
+    # Vertex AI has no Files API, so the clip is sent inline; requests are capped at ~20 MB after base64.
+    if path.stat().st_size > MAX_INLINE_BYTES:
+        raise ValueError(f"Clip {path.name} is too large to send inline to Vertex AI")
+    return types.Part(inline_data=types.Blob(data=path.read_bytes(), mime_type="video/mp4"),
+                      video_metadata=types.VideoMetadata(fps=fps) if fps else None)
+
 class Gemini:
     def __init__(self):
         self.client = genai.Client(vertexai=True, api_key=os.environ["GOOGLE_API_KEY"], http_options=types.HttpOptions(timeout=180_000))
@@ -17,14 +24,13 @@ class Gemini:
         self.client.close()
 
     def analyze(self, path: Path, prompt: str, schema):
-        # Vertex AI has no Files API, so the clip is sent inline; requests are capped at ~20 MB after base64.
-        if path.stat().st_size > MAX_INLINE_BYTES:
-            raise ValueError(f"Clip {path.name} is too large to send inline to Vertex AI")
-        clip = types.Part.from_bytes(data=path.read_bytes(), mime_type="video/mp4")
+        return self.generate([video_part(path), prompt], schema)
+
+    def generate(self, contents, schema, model: str | None = None):
         for attempt in range(3):
             try:
                 response = self.client.models.generate_content(
-                    model=MODEL, contents=[clip, prompt],
+                    model=model or MODEL, contents=contents,
                     config=types.GenerateContentConfig(response_mime_type="application/json", response_schema=schema, temperature=0))
                 if response.parsed is None:
                     raise RuntimeError("Gemini returned no structured analysis")

@@ -5,3 +5,6 @@ python-dotenv
 pydantic>=2
 google-genai
 yt-dlp             # fetch_clips: demo clips from YouTube
+ultralytics        # YOLO pose (app/pose.py); pulls torch (CPU on Windows) + opencv-python
+numpy
+lap>=0.5.12        # ByteTrack; ultralytics auto-installs it otherwise

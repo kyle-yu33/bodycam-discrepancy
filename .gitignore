@@ -14,5 +14,6 @@ data/cache/*
 .DS_Store
 
 data/analyses/
+data/cases/
 data/hf/
 *.tsbuildinfo
