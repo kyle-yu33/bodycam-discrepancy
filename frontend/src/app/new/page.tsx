@@ -5,20 +5,8 @@ import { useRouter } from "next/navigation";
 import { createCase, getCaseJob, getHealth, stopCase, type CaseJob, type Health } from "@/lib/ledger";
 import { QueueList, useCaseJobs } from "@/components/review/Queue";
 
-const MAX_CLIP_SEC = 90; // backend MAX_CLIP_SEC: full clips go to Gemini inline
 const POLL_MS = 2000;
-
-// Reads a local video's duration without uploading it.
-function videoDuration(file: File): Promise<number> {
-  return new Promise((resolve) => {
-    const url = URL.createObjectURL(file);
-    const v = document.createElement("video");
-    v.preload = "metadata";
-    v.onloadedmetadata = () => { URL.revokeObjectURL(url); resolve(v.duration); };
-    v.onerror = () => { URL.revokeObjectURL(url); resolve(NaN); };
-    v.src = url;
-  });
-}
+type SourceMode = "upload" | "youtube";
 
 // Every upload the backend is running or holding, so a waiting job can see what is ahead of it.
 function AnalysisQueue({ mine, onStopMine }: { mine?: string; onStopMine: () => void }) {
@@ -41,7 +29,8 @@ export default function NewCase() {
   const [health, setHealth] = useState<Health | null>(null);
   const [healthError, setHealthError] = useState("");
   const [video, setVideo] = useState<File | null>(null);
-  const [duration, setDuration] = useState<number | null>(null);
+  const [sourceMode, setSourceMode] = useState<SourceMode>("upload");
+  const [youtubeUrl, setYoutubeUrl] = useState("");
   const [name, setName] = useState("");
   const [report, setReport] = useState("");
   const [reportFile, setReportFile] = useState("");
@@ -74,9 +63,8 @@ export default function NewCase() {
     return () => window.clearInterval(timer);
   }, [job, router]);
 
-  async function pickVideo(file: File | null) {
+  function pickVideo(file: File | null) {
     setVideo(file);
-    setDuration(file ? await videoDuration(file) : null);
   }
 
   async function attachReport(file: File | null) {
@@ -88,12 +76,13 @@ export default function NewCase() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!video) return;
+    if (sourceMode === "upload" && !video) return;
     setError("");
     setNotice("");
     setSubmitting(true);
     const form = new FormData();
-    form.append("video", video);
+    if (sourceMode === "upload" && video) form.append("video", video);
+    if (sourceMode === "youtube") form.append("youtube_url", youtubeUrl);
     form.append("report_text", report);
     form.append("name", name);
     try {
@@ -122,8 +111,8 @@ export default function NewCase() {
   }
 
   const blocked = health && (!health.gemini_configured || !health.ffmpeg_available);
-  const tooLong = duration != null && duration > MAX_CLIP_SEC;
-  const canSubmit = !!video && report.trim().length > 0 && !tooLong && !blocked && !submitting;
+  const canSubmit = (sourceMode === "upload" ? !!video : !!youtubeUrl.trim())
+    && report.trim().length > 0 && !blocked && !submitting;
   const running = job && (job.status === "queued" || job.status === "processing");
   const elapsed = started ? Math.max(0, Math.round((now - started) / 1000)) : 0;
 
@@ -138,7 +127,7 @@ export default function NewCase() {
       <main className="mx-auto max-w-2xl p-6">
         <h1 className="text-xl font-semibold tracking-tight">Analyze a clip against a report</h1>
         <p className="mt-1 text-sm text-muted">
-          Upload body-worn camera footage and the written report. Each claim in the report is checked against the footage and
+          Add body-worn camera footage and the written report. Each claim in the report is checked against the footage and
           linked to the moment that bears on it.
         </p>
 
@@ -166,7 +155,7 @@ export default function NewCase() {
               <div className="h-full rounded-full bg-brand transition-all duration-700" style={{ width: `${Math.round(job.progress * 100)}%` }} />
             </div>
             <p className="mt-3 text-xs text-muted">
-              {elapsed} s elapsed · usually 2 to 5 minutes. You can leave this page; the case appears in the case list when it&apos;s done.
+              {elapsed} s elapsed · longer videos may take considerably more time. You can leave this page; the case appears in the case list when it&apos;s done.
             </p>
             {running && (
               <button onClick={stopMine} className="mt-4 rounded-lg border border-hairline px-3 py-1.5 text-sm text-review hover:bg-review-bg">
@@ -176,18 +165,27 @@ export default function NewCase() {
           </section>
         ) : (
           <form onSubmit={submit} className="mt-6 space-y-5 rounded-xl border border-hairline bg-surface p-5">
-            <label className="block">
+            <fieldset className="block">
               <span className="text-sm font-medium">Footage</span>
-              <span className="block text-xs text-muted">MP4 or MOV with its original audio, {MAX_CLIP_SEC} seconds or less.</span>
-              <input type="file" accept=".mp4,.mov,video/mp4,video/quicktime" required
-                onChange={(e) => pickVideo(e.target.files?.[0] ?? null)}
-                className="mt-2 block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-sunken file:px-3 file:py-2 file:text-sm" />
-              {tooLong && (
-                <span className="mt-1 block text-xs text-review">
-                  This clip is {Math.round(duration!)} s long. Trim it to {MAX_CLIP_SEC} s or less first.
-                </span>
-              )}
-            </label>
+              <span className="block text-xs text-muted">Upload MP4/MOV footage or import a full video from YouTube.</span>
+              <div className="mt-2 flex gap-2" role="group" aria-label="Video source">
+                <button type="button" aria-pressed={sourceMode === "upload"} onClick={() => setSourceMode("upload")}
+                  className={`rounded-lg border px-3 py-2 text-sm ${sourceMode === "upload" ? "border-brand text-brand" : "border-hairline"}`}>Upload video</button>
+                <button type="button" aria-pressed={sourceMode === "youtube"} onClick={() => setSourceMode("youtube")}
+                  className={`rounded-lg border px-3 py-2 text-sm ${sourceMode === "youtube" ? "border-brand text-brand" : "border-hairline"}`}>YouTube link</button>
+              </div>
+              {sourceMode === "upload" ? <>
+                <input type="file" accept=".mp4,.mov,video/mp4,video/quicktime" required
+                  onChange={(e) => pickVideo(e.target.files?.[0] ?? null)}
+                  className="mt-2 block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-sunken file:px-3 file:py-2 file:text-sm" />
+              </> : <div className="mt-3 space-y-3">
+                <label className="block text-sm">YouTube video link
+                  <input type="url" value={youtubeUrl} onChange={(e) => setYoutubeUrl(e.target.value)} placeholder="https://www.youtube.com/watch?v=…" required
+                    className="mt-1 block w-full rounded-lg border border-hairline bg-sunken px-3 py-2 text-sm" />
+                </label>
+                <p className="text-xs text-muted">The whole video is imported and analyzed, even if the link contains a timestamp.</p>
+              </div>}
+            </fieldset>
 
             <div>
               <div className="flex items-baseline justify-between gap-3">
@@ -221,7 +219,7 @@ export default function NewCase() {
             <div className="flex items-center gap-3">
               <button type="submit" disabled={!canSubmit}
                 className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white shadow-sm hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60">
-                {submitting ? "Uploading…" : "Analyze"}
+                {submitting ? (sourceMode === "youtube" ? "Importing…" : "Uploading…") : "Analyze"}
               </button>
               <Link href="/" className="text-sm text-muted hover:text-ink">Cancel</Link>
             </div>

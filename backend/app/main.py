@@ -21,6 +21,7 @@ from . import cases as claim_cases
 from . import video as ffmpeg
 from .cases import CASES
 from .ledger import CaseResult
+from . import youtube
 
 DATA = Path(os.getenv("DATA_DIR", Path(__file__).resolve().parents[2] / "data")) / "analyses"
 DATA.mkdir(parents=True, exist_ok=True)
@@ -136,7 +137,6 @@ CASES.mkdir(parents=True, exist_ok=True)
 app.mount("/case-media", StaticFiles(directory=CASES), name="case-media")
 
 CASE_ID = re.compile(r"[a-z0-9_-]+")
-MAX_CLIP_SEC = float(os.getenv("MAX_CLIP_SEC", "90"))  # full clips go to Vertex AI inline, which caps request size
 MAX_REPORT_BYTES = 200_000
 
 def case_result(case: str) -> CaseResult:
@@ -189,7 +189,8 @@ def read_report(report_text: str, report: UploadFile | None) -> str:
 class CaseStopped(Exception):
     pass
 
-def process_case(job: Job, folder: Path, original: Path, report_text: str):
+def process_case(job: Job, folder: Path, original: Path, report_text: str,
+                source_url: str | None = None):
     log = logging.getLogger("uvicorn.error")
     stopping = app.state.stopping
     def progress(stage, value):
@@ -201,8 +202,16 @@ def process_case(job: Job, folder: Path, original: Path, report_text: str):
         job.status, job.stage, job.progress = "processing", stage, value
         save(folder / "job.json", job)
     try:
+        if source_url:
+            progress("Downloading YouTube video", 0.02)
+            original, source_title = youtube.download_video(source_url, folder)
+            job.filename = source_title
+            save(folder / "job.json", job)
+            ffmpeg.duration(original)
         progress("Starting", 0)
-        claim_cases.run(job.id, original, report_text, log=log.info, progress=progress, origin="upload")
+        source_metadata = ({"source_url": source_url, "source_title": source_title} if source_url else {})
+        claim_cases.run(job.id, original, report_text, log=log.info, progress=progress,
+                        origin="upload", **source_metadata)
         job.status, job.stage, job.progress = "complete", "Ready for review", 1
     except CaseStopped:
         log.info("Case %s stopped by reviewer", job.id)
@@ -218,15 +227,26 @@ def process_case(job: Job, folder: Path, original: Path, report_text: str):
     save(folder / "job.json", job)
 
 @app.post("/cases", response_model=Job, status_code=202)
-def create_case(video: UploadFile = File(...), report_text: str = Form(""),
-                report: UploadFile | None = File(None), name: str = Form("")):
+def create_case(video: UploadFile | None = File(None), report_text: str = Form(""),
+                report: UploadFile | None = File(None), name: str = Form(""),
+                youtube_url: str = Form("")):
     if not os.getenv("GOOGLE_API_KEY"):
         raise HTTPException(503, "Set GOOGLE_API_KEY in backend/.env first")
     if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
         raise HTTPException(503, "Install FFmpeg and ffprobe first")
-    suffix = Path(video.filename or "").suffix.lower()
-    if suffix not in (".mp4", ".mov"):
-        raise HTTPException(415, "Upload an MP4 or MOV video")
+    if bool(video) == bool(youtube_url.strip()):
+        raise HTTPException(400, "Choose either a video upload or a YouTube link")
+    canonical_url = None
+    if youtube_url.strip():
+        try:
+            canonical_url = youtube.validate_youtube_url(youtube_url)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc))
+        suffix = ".mp4"
+    else:
+        suffix = Path(video.filename or "").suffix.lower()
+        if suffix not in (".mp4", ".mov"):
+            raise HTTPException(415, "Upload an MP4 or MOV video")
     text = read_report(report_text, report)
     case = new_case_id(name)
     folder = CASES / case
@@ -240,30 +260,31 @@ def create_case(video: UploadFile = File(...), report_text: str = Form(""),
         raise HTTPException(409, f"A case named '{case}' already exists; choose another name")
     original = folder / f"original{suffix}"
     try:
-        total = 0
-        with original.open("wb") as output:
-            while chunk := video.file.read(1024*1024):
-                total += len(chunk)
-                if total > int(os.getenv("MAX_UPLOAD_MB", "2048"))*1024*1024:
-                    raise HTTPException(413, "Video exceeds upload size limit")
-                output.write(chunk)
-        if not total:
-            raise HTTPException(400, "Video is empty")
-        try:
-            dur = ffmpeg.duration(original)
-        except Exception:
-            raise HTTPException(400, "Could not read the video; is it a playable MP4 or MOV?")
-        if dur > MAX_CLIP_SEC:
-            raise HTTPException(413, f"The clip is {dur:.0f} s long; trim it to {MAX_CLIP_SEC:.0f} s or less")
+        if not canonical_url:
+            total = 0
+            with original.open("wb") as output:
+                while chunk := video.file.read(1024*1024):
+                    total += len(chunk)
+                    if total > int(os.getenv("MAX_UPLOAD_MB", "2048"))*1024*1024:
+                        raise HTTPException(413, "Video exceeds upload size limit")
+                    output.write(chunk)
+            if not total:
+                raise HTTPException(400, "Video is empty")
+            try:
+                ffmpeg.duration(original)
+            except Exception:
+                raise HTTPException(400, "Could not read the video; is it a playable MP4 or MOV?")
         (folder / "report.txt").write_text(text, encoding="utf-8")
-        job = Job(id=case, filename=Path(video.filename).name, created_at=datetime.now(timezone.utc).isoformat())
+        job = Job(id=case, filename=("YouTube video" if canonical_url else Path(video.filename or "video.mp4").name),
+                  created_at=datetime.now(timezone.utc).isoformat())
         save(folder / "job.json", job)
     except Exception:
         shutil.rmtree(folder, ignore_errors=True)
         raise
     finally:
-        video.file.close()
-    app.state.worker.submit(process_case, job.model_copy(), folder, original, text)
+        if video is not None:
+            video.file.close()
+    app.state.worker.submit(process_case, job.model_copy(), folder, original, text, canonical_url)
     return job
 
 @app.get("/case-jobs", response_model=list[Job])
