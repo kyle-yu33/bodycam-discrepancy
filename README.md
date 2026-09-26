@@ -25,7 +25,7 @@ the scaffold is kept runnable until it is replaced.
 
 | Topic | Scaffold (current code) | Target (`context/`) |
 |---|---|---|
-| Vision layer | Gemini only, via Vertex AI (YOLO removed in `47efabe`) | Gemini only; no YOLO/tracking/pose (`stack.md`) |
+| Vision layer | Gemini only, via Vertex AI (YOLO removed in `47efabe`) | Gemini + YOLO pose (offline Python preprocessing) as frame-level evidence for physical claims (`stack.md`) |
 | Backend | Python FastAPI on :8000 | Next.js route handler `POST /api/analyze` (`backend.md`) |
 | Result states | Event statuses `retained` / `uncertain` / `dismissed` | 4 approved states, amber for review, no "contradiction" (`frontend.md`) |
 | Claim types | None yet: event discovery only, no report claims | `visual` / `audio` / `documentary` / `subjective_or_legal` |
