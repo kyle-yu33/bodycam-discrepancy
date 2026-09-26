@@ -1,7 +1,8 @@
 "use client";
 import Link from "next/link";
 import type { CaseSummary, Origin, Status } from "@/lib/ledger";
-import { STATUS, STATUS_ORDER, caseMeta } from "@/lib/present";
+import { STATUS, STATUS_ORDER } from "@/lib/present";
+import { CaseTabs } from "./CaseTabs";
 import { QueueMenu } from "./Queue";
 
 export type Phase = "loading" | "ready" | "analyzing" | "loaded" | "failed";
@@ -47,14 +48,7 @@ export function Header({ caseId, cases, phase, origin, onAnalyze, onHow, onCaseR
         <span className="text-lg font-semibold tracking-tight">EvidenceLens</span>
       </Link>
 
-      <nav className="flex gap-1 rounded-lg bg-paper p-1" aria-label="Cases">
-        {(cases.length ? cases.map((c) => c.case) : [caseId]).map((id) => (
-          <Link key={id} href={`/cases/${id}`} aria-current={id === caseId ? "page" : undefined}
-            className={`rounded-md px-3 py-1.5 text-sm transition ${id === caseId ? "bg-card font-medium shadow-sm" : "text-muted hover:text-ink"}`}>
-            {caseMeta(id).title}
-          </Link>
-        ))}
-      </nav>
+      <CaseTabs caseId={caseId} cases={cases} />
 
       <div className="ml-auto flex flex-wrap items-center gap-2 text-xs">
         <span className="rounded-full border border-line px-2.5 py-1 text-muted">

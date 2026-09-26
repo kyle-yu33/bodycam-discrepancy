@@ -37,7 +37,7 @@ def _media(case: str, name: str) -> str:
     return f"{MEDIA}/{case}/{name}"
 
 
-def prepare(case: str, src: Path, repose: bool = False) -> tuple[Path, float, list[PoseEvent]]:
+def prepare(case: str, src: Path, repose: bool = False, on_pose=None) -> tuple[Path, float, list[PoseEvent]]:
     out = CASES / case
     out.mkdir(parents=True, exist_ok=True)
     clip = out / "clip.mp4"
@@ -45,7 +45,7 @@ def prepare(case: str, src: Path, repose: bool = False) -> tuple[Path, float, li
         video.normalize(src, clip)
     pose_json = out / "pose.json"
     if repose or not pose_json.exists():
-        events, raw = pose.analyze(clip, out)
+        events, raw = pose.analyze(clip, out, on_frame=on_pose)
         video.mux_audio(raw, clip, out / "annotated.mp4")
         raw.unlink(missing_ok=True)
         pose_json.write_text(json.dumps([e.model_dump() for e in events], indent=2), encoding="utf-8")
@@ -134,12 +134,14 @@ def _finish(g: Gemini, case: str, clip: Path, dur: float, claim: Claim, chk: Cla
 
 def run(case: str, src: Path, report_text: str, repose: bool = False, reextract: bool = False, log=print,
         progress=None, origin: str = "demo") -> CaseResult:
-    """progress(stage, fraction) is called as each step starts; the upload API shows it to the user."""
+    """progress(stage, fraction) is called as each step starts and after every pose frame; the upload API shows it
+    to the user, and may raise to stop the run."""
     step = progress or (lambda stage, fraction: None)
     out = CASES / case
     log(f"[{case}] preparing clip and pose")
     step("Preparing footage and tracking body pose", 0.05)
-    clip, dur, events = prepare(case, src, repose)
+    clip, dur, events = prepare(case, src, repose,
+                                on_pose=lambda f: step("Preparing footage and tracking body pose", 0.05 + 0.33 * f))
     if repose:
         (out / "transcript.json").unlink(missing_ok=True)
     step("Transcribing audio", 0.4)

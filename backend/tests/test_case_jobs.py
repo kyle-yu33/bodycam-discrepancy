@@ -21,6 +21,10 @@ REPORT = "FICTIONAL REPORT.\n\nSUBJECT A raised both arms."
 
 def fake_run(cases_dir: Path, fail_on: str | None = None):
     def run(case, src, report_text, log=print, progress=None, origin="demo"):
+        if case == "slow":  # long pose step: reports progress until stopped (or 5 s)
+            for i in range(500):
+                progress("Preparing footage and tracking body pose", 0.05 + i / 2000)
+                time.sleep(0.01)
         progress("Checking each claim against the footage", 0.6)
         if case == fail_on:
             raise RuntimeError("model unavailable")
@@ -134,6 +138,35 @@ class CaseUploadTests(unittest.TestCase):
             (self.cases / "partial").mkdir()
             (self.cases / "partial" / "job.json").write_text("{", encoding="utf-8")
             self.assertEqual([j["id"] for j in client.get("/case-jobs").json()], ["running", "later"])
+
+    def test_stop_deletes_queued_and_running_uploads(self):
+        with TestClient(main.app) as client:
+            self.assertEqual(self.post(client, name="slow").status_code, 202)
+            self.assertEqual(self.post(client, name="next").status_code, 202)
+            for _ in range(200):
+                if client.get("/cases/slow/job").json()["status"] == "processing":
+                    break
+                time.sleep(0.01)
+
+            r = client.post("/cases/next/stop")
+            self.assertEqual(r.status_code, 200)
+            self.assertEqual(r.json()["stage"], "Stopped")
+            self.assertFalse((self.cases / "next").exists())
+
+            r = client.post("/cases/slow/stop")
+            self.assertEqual(r.status_code, 200)
+            self.assertTrue(r.json()["stage"].startswith("Stopping"))
+            for _ in range(300):
+                if not (self.cases / "slow").exists():
+                    break
+                time.sleep(0.01)
+            self.assertFalse((self.cases / "slow").exists())
+            self.assertEqual(client.get("/case-jobs").json(), [])
+
+            self.assertEqual(client.post("/cases/nope/stop").status_code, 404)
+            self.assertEqual(self.post(client, name="done").status_code, 202)
+            wait(client, "done")
+            self.assertEqual(client.post("/cases/done/stop").status_code, 409)
 
     def test_interrupted_jobs_fail_on_restart(self):
         (self.cases / "stale").mkdir()

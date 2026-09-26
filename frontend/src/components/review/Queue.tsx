@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { getCaseJob, listCaseJobs, type CaseJob } from "@/lib/ledger";
+import { getCaseJob, listCaseJobs, stopCase, type CaseJob } from "@/lib/ledger";
 
 const POLL_MS = 3000;
 
@@ -44,12 +44,29 @@ export function useCaseJobs(onComplete?: (job: CaseJob) => void) {
     return () => { alive = false; window.clearInterval(timer); };
   }, []);
 
+  const [stopping, setStopping] = useState<Set<string>>(new Set());
+  const [stopError, setStopError] = useState("");
+
   const dismiss = (id: string) => setFinished((f) => f.filter((x) => x.id !== id));
-  return { active, finished, dismiss };
+  const stop = async (id: string) => {
+    if (!window.confirm(`Stop analyzing ${id}? The upload is deleted; upload it again to retry.`)) return;
+    setStopError("");
+    setStopping((s) => new Set(s).add(id));
+    try {
+      const job = await stopCase(id);
+      seen.current.delete(id);  // it was stopped, not finished
+      if (job.status !== "processing") setActive((a) => a.filter((x) => x.id !== id));
+    } catch (e) {
+      setStopError((e as Error).message);
+      setStopping((s) => { const n = new Set(s); n.delete(id); return n; });
+    }
+  };
+  return { active, finished, dismiss, stop, stopping, stopError };
 }
 
-export function QueueList({ active, finished = [], mine, onDismiss }: {
+export function QueueList({ active, finished = [], mine, onDismiss, onStop, stopping }: {
   active: CaseJob[]; finished?: CaseJob[]; mine?: string; onDismiss?: (id: string) => void;
+  onStop?: (id: string) => void; stopping?: Set<string>;
 }) {
   return (
     <ol className="space-y-3">
@@ -60,11 +77,17 @@ export function QueueList({ active, finished = [], mine, onDismiss }: {
               <span className="font-medium">{j.id}</span>
               <span className="text-muted"> · {j.filename}{j.id === mine ? " · your upload" : ""}</span>
             </span>
-            <span className="shrink-0 text-xs text-muted">
+            <span className="flex shrink-0 items-baseline gap-2 text-xs text-muted">
               {j.status === "processing" ? "Running" : queuedLabel(active.slice(0, i).filter((x) => x.status === "queued").length)}
+              {onStop && (
+                <button onClick={() => onStop(j.id)} disabled={stopping?.has(j.id)}
+                  className="rounded border border-line px-1.5 py-0.5 text-review hover:bg-review-bg disabled:opacity-60">
+                  {stopping?.has(j.id) ? "Stopping…" : "Stop"}
+                </button>
+              )}
             </span>
           </div>
-          <p className="text-xs text-muted">{j.status === "processing" ? j.stage : "Waiting to start"}</p>
+          <p className="text-xs text-muted">{stopping?.has(j.id) ? "Stopping after the current step" : j.status === "processing" ? j.stage : "Waiting to start"}</p>
           <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-paper">
             <div className="h-full rounded-full bg-brand transition-all duration-700" style={{ width: `${Math.round(j.progress * 100)}%` }} />
           </div>
@@ -94,7 +117,7 @@ export function QueueList({ active, finished = [], mine, onDismiss }: {
 
 // Header pill: shows only while something is queued, running, or just finished; opens the full list.
 export function QueueMenu({ onComplete }: { onComplete?: (job: CaseJob) => void }) {
-  const { active, finished, dismiss } = useCaseJobs(onComplete);
+  const { active, finished, dismiss, stop, stopping, stopError } = useCaseJobs(onComplete);
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
 
@@ -126,7 +149,8 @@ export function QueueMenu({ onComplete }: { onComplete?: (job: CaseJob) => void 
           className="absolute right-0 top-full z-30 mt-2 w-80 rounded-xl border border-line bg-card p-4 text-left shadow-lg">
           <h2 className="text-sm font-semibold">Analysis queue</h2>
           <p className="mb-3 mt-0.5 text-xs text-muted">Cases run one at a time, in upload order.</p>
-          <QueueList active={active} finished={finished} onDismiss={dismiss} />
+          <QueueList active={active} finished={finished} onDismiss={dismiss} onStop={stop} stopping={stopping} />
+          {stopError && <p className="mt-3 text-xs text-review" role="alert">{stopError}</p>}
         </div>
       )}
     </div>

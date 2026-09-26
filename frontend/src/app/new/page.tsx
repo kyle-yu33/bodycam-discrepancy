@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createCase, getCaseJob, getHealth, type CaseJob, type Health } from "@/lib/ledger";
+import { createCase, getCaseJob, getHealth, stopCase, type CaseJob, type Health } from "@/lib/ledger";
 import { QueueList, useCaseJobs } from "@/components/review/Queue";
 
 const MAX_CLIP_SEC = 90; // backend MAX_CLIP_SEC: full clips go to Gemini inline
@@ -21,15 +21,17 @@ function videoDuration(file: File): Promise<number> {
 }
 
 // Every upload the backend is running or holding, so a waiting job can see what is ahead of it.
-function AnalysisQueue({ mine }: { mine?: string }) {
-  const { active, finished, dismiss } = useCaseJobs();
+function AnalysisQueue({ mine, onStopMine }: { mine?: string; onStopMine: () => void }) {
+  const { active, finished, dismiss, stop, stopping, stopError } = useCaseJobs();
   const others = finished.filter((j) => j.id !== mine);
   if (!active.length && !others.length) return null;
   return (
     <section className="mt-6 rounded-xl border border-line bg-card p-5" aria-live="polite">
       <h2 className="text-sm font-semibold">Analysis queue</h2>
       <p className="mb-3 mt-0.5 text-xs text-muted">Cases run one at a time, in upload order.</p>
-      <QueueList active={active} finished={others} mine={mine} onDismiss={dismiss} />
+      <QueueList active={active} finished={others} mine={mine} onDismiss={dismiss} stopping={stopping}
+        onStop={(id) => (id === mine ? onStopMine() : stop(id))} />
+      {stopError && <p className="mt-3 text-xs text-review" role="alert">{stopError}</p>}
     </section>
   );
 }
@@ -44,6 +46,7 @@ export default function NewCase() {
   const [report, setReport] = useState("");
   const [reportFile, setReportFile] = useState("");
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [job, setJob] = useState<CaseJob | null>(null);
   const [started, setStarted] = useState(0);
@@ -87,6 +90,7 @@ export default function NewCase() {
     e.preventDefault();
     if (!video) return;
     setError("");
+    setNotice("");
     setSubmitting(true);
     const form = new FormData();
     form.append("video", video);
@@ -101,6 +105,19 @@ export default function NewCase() {
       setError((err as Error).message);
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  // Keeps the form filled in, so the same clip and report can be resubmitted.
+  async function stopMine() {
+    if (!job || !window.confirm(`Stop analyzing ${job.id}? The upload is deleted; submit again to retry.`)) return;
+    try {
+      await stopCase(job.id);
+      setJob(null);
+      setError("");
+      setNotice(`Stopped ${job.id}. Your clip and report are still filled in below.`);
+    } catch (e) {
+      setError((e as Error).message);
     }
   }
 
@@ -151,6 +168,11 @@ export default function NewCase() {
             <p className="mt-3 text-xs text-muted">
               {elapsed} s elapsed · usually 2 to 5 minutes. You can leave this page; the case appears in the case list when it&apos;s done.
             </p>
+            {running && (
+              <button onClick={stopMine} className="mt-4 rounded-lg border border-line px-3 py-1.5 text-sm text-review hover:bg-review-bg">
+                Stop analysis
+              </button>
+            )}
           </section>
         ) : (
           <form onSubmit={submit} className="mt-6 space-y-5 rounded-xl border border-line bg-card p-5">
@@ -193,6 +215,7 @@ export default function NewCase() {
                 The analysis couldn&apos;t finish: {job.error ?? "unknown error"}. Check the backend log, then try again.
               </p>
             )}
+            {notice && <p className="rounded-lg bg-paper p-3 text-sm" role="status">{notice}</p>}
             {error && <p className="rounded-lg bg-review-bg p-3 text-sm text-review" role="alert">{error}</p>}
 
             <div className="flex items-center gap-3">
@@ -211,7 +234,7 @@ export default function NewCase() {
           </form>
         )}
 
-        <AnalysisQueue mine={job?.id} />
+        <AnalysisQueue mine={job?.id} onStopMine={stopMine} />
       </main>
     </div>
   );

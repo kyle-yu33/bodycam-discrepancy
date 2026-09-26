@@ -97,3 +97,5 @@ export const getHealth = () => get<Health>("/health");
 export const createCase = (form: FormData) => get<CaseJob>("/cases", { method: "POST", body: form });
 export const getCaseJob = (id: string) => get<CaseJob>(`/cases/${encodeURIComponent(id)}/job`);
 export const listCaseJobs = () => get<CaseJob[]>("/case-jobs");
+// Deletes the upload: at once if queued, at the next checkpoint (about a second) if running.
+export const stopCase = (id: string) => get<CaseJob>(`/cases/${encodeURIComponent(id)}/stop`, { method: "POST" });

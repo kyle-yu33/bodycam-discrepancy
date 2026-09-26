@@ -26,7 +26,7 @@ DATA = Path(os.getenv("DATA_DIR", Path(__file__).resolve().parents[2] / "data"))
 DATA.mkdir(parents=True, exist_ok=True)
 
 def save(path: Path, model):
-    temp = path.with_suffix(".tmp")
+    temp = path.parent / f"{path.stem}.{uuid.uuid4().hex[:8]}.tmp"  # the worker and a stop request may both write
     temp.write_text(model.model_dump_json(indent=2), encoding="utf-8")
     for attempt in range(40):
         try:
@@ -45,6 +45,7 @@ async def lifespan(app):
             job.status, job.stage, job.error = "failed", "Interrupted", "Server restarted; upload again to retry."
             save(path, job)
     app.state.worker = ThreadPoolExecutor(max_workers=1)
+    app.state.stopping = set()  # case ids the reviewer stopped; the worker checks at every progress update
     yield
     # Don't hold a reload or Ctrl+C hostage to the whole queue; startup marks unfinished jobs failed.
     app.state.worker.shutdown(wait=False, cancel_futures=True)
@@ -185,14 +186,31 @@ def read_report(report_text: str, report: UploadFile | None) -> str:
         raise HTTPException(400, "Add the report text or attach a .txt report")
     return text
 
+class CaseStopped(Exception):
+    pass
+
 def process_case(job: Job, folder: Path, original: Path, report_text: str):
     log = logging.getLogger("uvicorn.error")
+    stopping = app.state.stopping
     def progress(stage, value):
-        job.status, job.stage, job.progress = "processing", stage, round(value, 3)
+        if job.id in stopping:
+            raise CaseStopped
+        value = round(value, 2)
+        if (job.status, job.stage, job.progress) == ("processing", stage, value):
+            return  # pose reports every frame; only write when the visible percentage changes
+        job.status, job.stage, job.progress = "processing", stage, value
         save(folder / "job.json", job)
     try:
+        progress("Starting", 0)
         claim_cases.run(job.id, original, report_text, log=log.info, progress=progress, origin="upload")
         job.status, job.stage, job.progress = "complete", "Ready for review", 1
+    except CaseStopped:
+        log.info("Case %s stopped by reviewer", job.id)
+        stopping.discard(job.id)
+        shutil.rmtree(folder, ignore_errors=True)
+        if not folder.exists():
+            return
+        job.status, job.stage, job.error = "failed", "Stopped", "Stopped by reviewer."  # a file was still locked
     except Exception as exc:
         log.exception("Case %s failed", job.id)
         job.status, job.stage = "failed", "Analysis failed"
@@ -260,6 +278,24 @@ def list_case_jobs():
         if job.status in ("queued", "processing"):
             jobs.append(job)
     return sorted(jobs, key=lambda j: j.created_at)
+
+@app.post("/cases/{case}/stop", response_model=Job)
+def stop_case(case: str):
+    """Stops an upload and deletes it: at once if queued, at the next progress update (about a second) if running."""
+    folder = CASES / case
+    if not CASE_ID.fullmatch(case) or not (folder / "job.json").exists():
+        raise HTTPException(404, "No upload job for this case")
+    job = Job.model_validate_json((folder / "job.json").read_text(encoding="utf-8"))
+    if job.status not in ("queued", "processing"):
+        raise HTTPException(409, "This analysis has already finished")
+    app.state.stopping.add(case)
+    if job.status == "queued":  # the worker hasn't touched it; process_case skips it when its turn comes
+        shutil.rmtree(folder, ignore_errors=True)
+        job.status, job.stage, job.error = "failed", "Stopped", "Stopped by reviewer."
+        return job
+    job.stage = "Stopping after the current step"
+    save(folder / "job.json", job)
+    return job
 
 @app.get("/cases/{case}/job", response_model=Job)
 def get_case_job(case: str):
