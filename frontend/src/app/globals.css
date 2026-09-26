@@ -5,8 +5,8 @@
    for a status, so nothing reads as red (context/frontend.md). The footage stage is the darkest surface.
    Fonts are bundled (@fontsource), so the demo works offline. */
 @theme {
-  --font-sans: "Inter Variable", "Segoe UI", system-ui, sans-serif;
-  --font-serif: "EB Garamond Variable", "Palatino Linotype", Georgia, serif;
+  --font-sans: var(--font-inter), "Segoe UI", system-ui, sans-serif;
+  --font-serif: var(--font-garamond), "Palatino Linotype", Georgia, serif;
   --font-mono: "Cascadia Mono", Consolas, "SFMono-Regular", Menlo, monospace;
 
   --color-canvas: #13100e;
