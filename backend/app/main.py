@@ -66,12 +66,12 @@ def process(job: Job, folder: Path, original: Path):
 
 @app.get("/health")
 def health():
-    return {"gemini_configured": bool(os.getenv("GEMINI_API_KEY")), "ffmpeg_available": bool(shutil.which("ffmpeg") and shutil.which("ffprobe"))}
+    return {"gemini_configured": bool(os.getenv("GOOGLE_API_KEY")), "ffmpeg_available": bool(shutil.which("ffmpeg") and shutil.which("ffprobe"))}
 
 @app.post("/analyses", response_model=Job, status_code=202)
 def create_analysis(video: UploadFile = File(...)):
-    if not os.getenv("GEMINI_API_KEY"):
-        raise HTTPException(503, "Set GEMINI_API_KEY in backend/.env first")
+    if not os.getenv("GOOGLE_API_KEY"):
+        raise HTTPException(503, "Set GOOGLE_API_KEY in backend/.env first")
     if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
         raise HTTPException(503, "Install FFmpeg and ffprobe first")
     suffix = Path(video.filename or "").suffix.lower()

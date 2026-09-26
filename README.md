@@ -25,11 +25,11 @@ the scaffold is kept runnable until it is replaced.
 
 | Topic | Scaffold (current code) | Target (`context/`) |
 |---|---|---|
-| Vision layer | YOLO pose + tracking fused with Gemini | Gemini only; no YOLO/tracking/pose (`stack.md`) |
+| Vision layer | Gemini only, via Vertex AI (YOLO removed in `47efabe`) | Gemini only; no YOLO/tracking/pose (`stack.md`) |
 | Backend | Python FastAPI on :8000 | Next.js route handler `POST /api/analyze` (`backend.md`) |
-| Result states | `supported` / `contradicted` / `not_visible`, red verdicts | 4 approved states, amber for review, no "contradiction" (`frontend.md`) |
-| Claim types | `visual` / `audio` / `subjective` | `visual` / `audio` / `documentary` / `subjective_or_legal` |
-| API key | Required | App must run without one; mock/cached analysis by default (`mvp.md`) |
+| Result states | Event statuses `retained` / `uncertain` / `dismissed` | 4 approved states, amber for review, no "contradiction" (`frontend.md`) |
+| Claim types | None yet: event discovery only, no report claims | `visual` / `audio` / `documentary` / `subjective_or_legal` |
+| API key | Required (Vertex AI `GOOGLE_API_KEY`) | App must run without one; mock/cached analysis by default (`mvp.md`) |
 | Secrets file | `backend/.env` | `.env.local` (`backend.md`) |
 
 Migrating means following the build order in [`context/skeleton.md`](context/skeleton.md), then
@@ -43,12 +43,12 @@ Gemini-only event discovery, matching the two-pass pipeline diagram. No reports 
     cd backend
     py -3.11 -m venv .venv
     .\.venv\Scripts\Activate.ps1
-    pip install -r requirements.txt
-    copy .env.example .env      # add GEMINI_API_KEY
-    python -m app.pose ..\data\clips\clip1.mp4                          # pose only
-    python -m app.pipeline ..\data\clips\clip1.mp4 ..\data\reports\clip1.txt
-    python -m app.eval <case_id> ..\data\ground_truth\clip1.json
+    pip install -r requirements-dev.txt
+    copy .env.example .env      # add GOOGLE_API_KEY (Vertex AI key, see context/backend.md)
+    python smoke_test.py        # one Vertex AI call; prints status + reply, never the key
     uvicorn app.main:app --reload --port 8000                           # http://localhost:8000/docs
+
+Tests (from the repo root): `python -m unittest backend/tests/test_pipeline.py -v`
 
 ### Frontend
     cd frontend

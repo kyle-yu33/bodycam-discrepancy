@@ -113,8 +113,8 @@ Pass 2 must never output a legal conclusion, a credibility judgment, or a claim 
 
 ## Secrets and data handling
 
-- Gemini API key stays server-side only.
-- Use `.env.local`, never commit it.
+- Gemini API key stays server-side only. It is a Vertex AI (Google Cloud) key named `GOOGLE_API_KEY`, used as `genai.Client(vertexai=True, api_key=...)` with no project/location. The AI Studio endpoint (`generativelanguage.googleapis.com`) does not accept it.
+- The Python scaffold reads it from `backend/.env`; the Next.js target should use `.env.local`. Never commit either.
 - Include `.env.example` with variable names only.
 - Do not accept or upload non-public case evidence in the MVP.
-- Only upload footage that is already publicly released; Gemini Files API uploads are retained for a limited period according to Google documentation.
+- Only send footage that is already publicly released. Vertex AI has no Files API, so clips go inline in each request (keep them short; the scaffold rejects clips over 15 MB).

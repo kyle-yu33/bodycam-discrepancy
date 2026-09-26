@@ -32,7 +32,7 @@ Incorrect wording:
 | Source | Build-relevant finding |
 |---|---|
 | [Gemini video understanding](https://ai.google.dev/gemini-api/docs/video-understanding) | Gemini accepts video input; default static processing extracts frames at 1 FPS; the docs warn this can miss rapid motion/quick changes; Files API is recommended for larger/reusable video inputs; prompts can request visual/audio details and timestamps. |
-| [Gemini Files API](https://ai.google.dev/gemini-api/docs/files) | Files may be stored for up to 48 hours; uploaded files can be manually deleted; upload only already-public demo media. |
+| [Gemini Files API](https://ai.google.dev/gemini-api/docs/files) | Files may be stored for up to 48 hours. **Not used:** the project runs on Vertex AI, where the Files API is unavailable, so clips are sent inline instead. |
 | [Gemini structured outputs](https://ai.google.dev/gemini-api/docs/structured-output) | Gemini supports JSON Schema/structured output; documentation warns teams to handle schema-compliant but semantically incorrect outputs. |
 | [Gemini rate limits](https://ai.google.dev/gemini-api/docs/rate-limits) | Limits are measured across RPM, TPM, and RPD; test the actual team project before relying on live calls. |
 

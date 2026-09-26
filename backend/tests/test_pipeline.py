@@ -75,7 +75,7 @@ class APITests(unittest.TestCase):
         from datetime import datetime, timezone
         import time
         import uuid
-        with tempfile.TemporaryDirectory() as folder, patch.object(main, "DATA", Path(folder)), patch.dict(os.environ, {"GEMINI_API_KEY": "test"}), patch.object(main.shutil, "which", return_value="binary"):
+        with tempfile.TemporaryDirectory() as folder, patch.object(main, "DATA", Path(folder)), patch.dict(os.environ, {"GOOGLE_API_KEY": "test"}), patch.object(main.shutil, "which", return_value="binary"):
             stale_id = str(uuid.uuid4())
             stale_folder = Path(folder)/stale_id
             stale_folder.mkdir()

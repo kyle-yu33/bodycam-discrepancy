@@ -1,49 +1,38 @@
-"""Two Gemini passes, using structured JSON and temporary Files API uploads."""
+"""Two Gemini passes on Vertex AI, using structured JSON and inline video clips."""
 import os
 import time
-import logging
 from pathlib import Path
 from google import genai
 from google.genai import types, errors
 from .schema import Detections, Detail, Candidate
 
 MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+MAX_INLINE_BYTES = 15 * 1024 * 1024
 
 class Gemini:
     def __init__(self):
-        self.client = genai.Client(api_key=os.environ["GEMINI_API_KEY"], http_options=types.HttpOptions(timeout=180_000))
+        self.client = genai.Client(vertexai=True, api_key=os.environ["GOOGLE_API_KEY"], http_options=types.HttpOptions(timeout=180_000))
 
     def close(self):
         self.client.close()
 
     def analyze(self, path: Path, prompt: str, schema):
-        uploaded = self.client.files.upload(file=path, config={"mime_type": "video/mp4"})
-        try:
-            deadline = time.monotonic() + 180
-            while uploaded.state and uploaded.state.name == "PROCESSING":
-                if time.monotonic() > deadline:
-                    raise TimeoutError("Gemini video processing timed out")
-                time.sleep(2)
-                uploaded = self.client.files.get(name=uploaded.name)
-            if not uploaded.state or uploaded.state.name != "ACTIVE":
-                raise RuntimeError("Gemini could not process the video")
-            for attempt in range(3):
-                try:
-                    response = self.client.models.generate_content(
-                        model=MODEL, contents=[uploaded, prompt],
-                        config=types.GenerateContentConfig(response_mime_type="application/json", response_schema=schema, temperature=0))
-                    if response.parsed is None:
-                        raise RuntimeError("Gemini returned no structured analysis")
-                    return schema.model_validate(response.parsed)
-                except errors.APIError as exc:
-                    if attempt == 2 or exc.code not in (429, 500, 502, 503, 504):
-                        raise
-                    time.sleep(2 ** (attempt + 1))
-        finally:
+        # Vertex AI has no Files API, so the clip is sent inline; requests are capped at ~20 MB after base64.
+        if path.stat().st_size > MAX_INLINE_BYTES:
+            raise ValueError(f"Clip {path.name} is too large to send inline to Vertex AI")
+        clip = types.Part.from_bytes(data=path.read_bytes(), mime_type="video/mp4")
+        for attempt in range(3):
             try:
-                self.client.files.delete(name=uploaded.name)
-            except Exception:
-                logging.exception("Unable to delete temporary Gemini upload")
+                response = self.client.models.generate_content(
+                    model=MODEL, contents=[clip, prompt],
+                    config=types.GenerateContentConfig(response_mime_type="application/json", response_schema=schema, temperature=0))
+                if response.parsed is None:
+                    raise RuntimeError("Gemini returned no structured analysis")
+                return schema.model_validate(response.parsed)
+            except errors.APIError as exc:
+                if attempt == 2 or exc.code not in (429, 500, 502, 503, 504):
+                    raise
+                time.sleep(2 ** (attempt + 1))
 
     def detect(self, path: Path, duration: float) -> Detections:
         return self.analyze(path, f"""Find candidate events in this bodycam clip. Prioritize recall, but do not invent events.

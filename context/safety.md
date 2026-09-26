@@ -33,7 +33,13 @@ EvidenceLens is a review aid. It may help a human locate and inspect evidence; i
 
 ## Gemini-specific privacy constraint
 
-The Gemini Files API is useful for demo video input, but Google’s public documentation states uploaded files are retained for a limited period (currently 48 hours). This is another reason the hackathon demo must use only already-public footage. Delete uploads when practical.
+The backend sends clips inline to Gemini on Vertex AI, billed through the team's Google Cloud project. It no longer uses the Gemini Files API, so clips are not stored as uploaded files. Every clip still leaves the laptop and goes to Google, which is another reason the demo must use only already-public footage.
+
+## API key handling
+
+- The Vertex AI key lives only in `backend/.env` as `GOOGLE_API_KEY`. `.env` is gitignored; `.env.example` holds the variable name only.
+- Never paste the key into code, commits, issues, screenshots, or slides. Never print or log it.
+- If the key is ever exposed, rotate it in Google Cloud and update `backend/.env`.
 
 ## Copy review checklist
 

@@ -14,6 +14,7 @@ This log records the core decisions that define EvidenceLens. Update it when the
 | Use two Gemini passes. | A broad pass can localize; a narrow pass can ground observations in a short clip. | Pass 2 is not independent verification. |
 | Start from report claims, not generic event detection. | The differentiator is claim-to-evidence audit, not surveillance-style event detection. | Remove generic firearm/fight/lunge detector logic from MVP. |
 | Avoid custom CV modules in MVP. | YOLO/tracking/pose/model fusion increase risk without improving judge value. | Use one multimodal model and a transparent ledger. |
+| Call Gemini through Vertex AI with a Google Cloud API key. | Billing goes through the team's Google Cloud project instead of AI Studio. | `GOOGLE_API_KEY` + `vertexai=True`; no Files API, so clips are sent inline and must stay short. Smoke test: `backend/smoke_test.py`. |
 | Use cached/mock demo analysis by default. | Live API latency, quotas, Wi-Fi, and model variance can ruin the demo. | Label mocked/cached analysis honestly; offer live rerun only as optional. |
 | Position against JusticeText carefully. | JusticeText clearly overlaps in bodycam review, documents, timelines, and inconsistency workflows. | Never claim it cannot analyze footage or definitively lacks vision AI; use public-documentation wording. |
 
