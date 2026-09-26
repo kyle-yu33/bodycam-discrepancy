@@ -102,17 +102,24 @@ Fixes that mattered:
 
 **Results vary between runs, even at temperature 0.** Same inputs:
 
-| Model | sfst2 (finger-to-nose) | sfst1 (walk-and-turn, night) |
-|---|---|---|
-| gemini-2.5-flash, run A | caught 3/3, 0 false flags | caught 3/4, 0 false flags |
-| gemini-2.5-flash, run B | caught 3/3, 0 false flags | caught 4/4, **1 false flag** |
-| gemini-2.5-flash, run C | **caught 1/3**, 0 false flags | — |
-| gemini-3-flash-preview | caught 2/3, 0 false flags | caught 2/4, 0 false flags |
-| gemini-2.5-pro, 3.1-pro-preview | running | running |
+| Model | sfst2 (3 planted) | sfst1 (4 planted) | Timing on sfst1 |
+|---|---|---|---|
+| gemini-2.5-flash | caught 3/3, 3/3, 1/3 (3 runs); 0 false flags | 3/4, 4/4 (2 runs); **1 false flag** (heel-to-toe) | Walk placed ~15 s early |
+| gemini-3-flash-preview | 2/3, 0 false flags | 2/4, 0 false flags | Correct |
+| gemini-2.5-pro | 2/3, 0 false flags | 1/4, 0 false flags | Correct; very cautious |
+| gemini-3.1-pro-preview | 2/3, 1 "false flag" (see below) | 3/4, 0 false flags | Walk placed early |
 
 So one good run proves nothing. Plan: choose the model on several runs, then flag a claim only if a
 majority of 3 checks flag it and the second look confirms, then freeze a perfect run as the demo
-result. The demo never depends on a live model call.
+result. The demo never depends on a live model call. Current front-runner: gemini-3-flash-preview
+(no false flags, correct timing, cheaper than Pro).
+
+**The models found three problems in our own answer key and report (not fixed yet; team call):**
+- "I checked SUBJECT B's eyes with my flashlight": the flashlight goes into his mouth (frame at
+  59.5 s; the officer asks about weed). 3.1 Pro's "false flag" is a correct catch.
+- "Stood with feet together": his feet are out of frame for the whole clip, so *insufficient* is right.
+- "Swayed two inches front to back": no model can see front-to-back sway from a camera facing him.
+  Reword to "side to side" or expect *insufficient*.
 
 ## 6. Remaining work
 
