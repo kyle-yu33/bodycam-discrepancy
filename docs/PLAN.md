@@ -50,6 +50,7 @@ UPLOAD   (from the UI, instead of PREPARE + ANALYZE)
   /new -> POST /cases  video (.mp4/.mov, <=90 s) + report text or .txt + optional name
        -> 202 + job; the single worker thread runs steps 1-6 into data/cases/<id>/
        -> UI polls GET /cases/{id}/job (stage + progress) -> opens /cases/{id}
+       GET /case-jobs lists every queued or running upload; /new shows it as the analysis queue
   Results carry origin "upload"; no ground truth, so no scoring. Jobs cut off by a restart are marked failed.
 
 REVIEW UI  (Next.js, to build)

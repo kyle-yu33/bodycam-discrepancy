@@ -124,6 +124,17 @@ class CaseUploadTests(unittest.TestCase):
             self.assertEqual(client.get("/cases/boom").status_code, 404)
             self.assertEqual(self.post(client, name="boom").status_code, 202)
 
+    def test_queue_lists_active_jobs_oldest_first(self):
+        with TestClient(main.app) as client:  # written after startup, which fails leftover active jobs
+            for case, status, created in [("later", "queued", "2026-09-26T10:02:00+00:00"),
+                                          ("running", "processing", "2026-09-26T10:01:00+00:00"),
+                                          ("done", "complete", "2026-09-26T10:00:00+00:00")]:
+                (self.cases / case).mkdir()
+                main.save(self.cases / case / "job.json", Job(id=case, filename="a.mp4", status=status, created_at=created))
+            (self.cases / "partial").mkdir()
+            (self.cases / "partial" / "job.json").write_text("{", encoding="utf-8")
+            self.assertEqual([j["id"] for j in client.get("/case-jobs").json()], ["running", "later"])
+
     def test_interrupted_jobs_fail_on_restart(self):
         (self.cases / "stale").mkdir()
         main.save(self.cases / "stale" / "job.json",

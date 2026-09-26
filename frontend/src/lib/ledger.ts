@@ -96,3 +96,4 @@ export const getHealth = () => get<Health>("/health");
 // form fields: video (file), report_text and/or report (.txt file), name (optional)
 export const createCase = (form: FormData) => get<CaseJob>("/cases", { method: "POST", body: form });
 export const getCaseJob = (id: string) => get<CaseJob>(`/cases/${encodeURIComponent(id)}/job`);
+export const listCaseJobs = () => get<CaseJob[]>("/case-jobs");

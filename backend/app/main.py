@@ -46,7 +46,8 @@ async def lifespan(app):
             save(path, job)
     app.state.worker = ThreadPoolExecutor(max_workers=1)
     yield
-    app.state.worker.shutdown(wait=True)
+    # Don't hold a reload or Ctrl+C hostage to the whole queue; startup marks unfinished jobs failed.
+    app.state.worker.shutdown(wait=False, cancel_futures=True)
 
 app = FastAPI(title="Bodycam Event Analysis", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=[os.getenv("FRONTEND_ORIGIN", "http://localhost:3000")], allow_methods=["GET", "POST"], allow_headers=["*"])
@@ -246,6 +247,19 @@ def create_case(video: UploadFile = File(...), report_text: str = Form(""),
         video.file.close()
     app.state.worker.submit(process_case, job.model_copy(), folder, original, text)
     return job
+
+@app.get("/case-jobs", response_model=list[Job])
+def list_case_jobs():
+    """Uploads that are queued or running, in the order the worker will take them."""
+    jobs = []
+    for path in CASES.glob("*/job.json"):
+        try:
+            job = Job.model_validate_json(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):  # mid-replace on Windows, or a half-written upload
+            continue
+        if job.status in ("queued", "processing"):
+            jobs.append(job)
+    return sorted(jobs, key=lambda j: j.created_at)
 
 @app.get("/cases/{case}/job", response_model=Job)
 def get_case_job(case: str):

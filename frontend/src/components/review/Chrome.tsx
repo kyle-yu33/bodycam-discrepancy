@@ -2,6 +2,7 @@
 import Link from "next/link";
 import type { CaseSummary, Origin, Status } from "@/lib/ledger";
 import { STATUS, STATUS_ORDER, caseMeta } from "@/lib/present";
+import { QueueMenu } from "./Queue";
 
 export type Phase = "loading" | "ready" | "analyzing" | "loaded" | "failed";
 
@@ -34,8 +35,9 @@ const PHASE_LABEL: Record<Phase, string> = {
   failed: "Analysis failed",
 };
 
-export function Header({ caseId, cases, phase, origin, onAnalyze, onHow }: {
+export function Header({ caseId, cases, phase, origin, onAnalyze, onHow, onCaseReady }: {
   caseId: string; cases: CaseSummary[]; phase: Phase; origin: Origin; onAnalyze: () => void; onHow: () => void;
+  onCaseReady: () => void;
 }) {
   const uploaded = origin === "upload";
   return (
@@ -64,6 +66,7 @@ export function Header({ caseId, cases, phase, origin, onAnalyze, onHow }: {
           {uploaded && phase === "loaded" ? "Result loaded" : PHASE_LABEL[phase]}
         </span>
         <button onClick={onHow} className="rounded-lg border border-line px-3 py-2 text-sm hover:bg-paper">How it works</button>
+        <QueueMenu onComplete={onCaseReady} />
         <Link href="/new" className="rounded-lg border border-line px-3 py-2 text-sm hover:bg-paper">New case</Link>
         {!uploaded && (
           <button onClick={onAnalyze} disabled={phase === "analyzing" || phase === "loading"}

@@ -61,6 +61,9 @@ export function Workspace({ caseId }: { caseId: string }) {
 
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
 
+  // A finished upload becomes a new case tab without reloading the page.
+  const refreshCases = useCallback(() => { listCases().then(setCases).catch(() => {}); }, []);
+
   const results = useMemo(() => data?.results ?? [], [data]);
   const selected = results.find((r) => r.claim.id === selectedId) ?? null;
   const visible = useMemo(() => results.filter((r) => !filter || r.status === filter), [results, filter]);
@@ -170,7 +173,8 @@ export function Workspace({ caseId }: { caseId: string }) {
 
   return (
     <div className="flex min-h-screen flex-col lg:h-screen">
-      <Header caseId={caseId} cases={cases} phase={phase} origin={data?.origin ?? "demo"} onAnalyze={analyze} onHow={() => setHow(true)} />
+      <Header caseId={caseId} cases={cases} phase={phase} origin={data?.origin ?? "demo"} onAnalyze={analyze} onHow={() => setHow(true)}
+        onCaseReady={refreshCases} />
       {revealed && data && (
         <SummaryBar counts={counts} total={results.length} filter={filter} setFilter={setFilter} model={data.model}
           createdAt={data.created_at} origin={data.origin} />

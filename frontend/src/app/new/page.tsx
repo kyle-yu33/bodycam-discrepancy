@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createCase, getCaseJob, getHealth, type CaseJob, type Health } from "@/lib/ledger";
+import { QueueList, useCaseJobs } from "@/components/review/Queue";
 
 const MAX_CLIP_SEC = 90; // backend MAX_CLIP_SEC: full clips go to Gemini inline
 const POLL_MS = 2000;
@@ -17,6 +18,20 @@ function videoDuration(file: File): Promise<number> {
     v.onerror = () => { URL.revokeObjectURL(url); resolve(NaN); };
     v.src = url;
   });
+}
+
+// Every upload the backend is running or holding, so a waiting job can see what is ahead of it.
+function AnalysisQueue({ mine }: { mine?: string }) {
+  const { active, finished, dismiss } = useCaseJobs();
+  const others = finished.filter((j) => j.id !== mine);
+  if (!active.length && !others.length) return null;
+  return (
+    <section className="mt-6 rounded-xl border border-line bg-card p-5" aria-live="polite">
+      <h2 className="text-sm font-semibold">Analysis queue</h2>
+      <p className="mb-3 mt-0.5 text-xs text-muted">Cases run one at a time, in upload order.</p>
+      <QueueList active={active} finished={others} mine={mine} onDismiss={dismiss} />
+    </section>
+  );
 }
 
 export default function NewCase() {
@@ -195,6 +210,8 @@ export default function NewCase() {
             </p>
           </form>
         )}
+
+        <AnalysisQueue mine={job?.id} />
       </main>
     </div>
   );
