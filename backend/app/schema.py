@@ -1,71 +1,63 @@
-"""Shared data contract. Change only via PR; mirror changes in shared/types.ts.
+"""Video event contracts. All timestamps are seconds in the original recording."""
+from typing import Literal
+from pydantic import BaseModel, Field, model_validator
 
-Models sent to Gemini as response_schema (Claim, ModelVerdict, SkepticCheck)
-must not have default values -- the Gemini schema converter rejects them.
-Use Optional[...] with no default for nullable fields.
-"""
-from enum import Enum
-from typing import Optional
+EventType = Literal["possible_firearm_pointing", "possible_weapon_visible", "possible_physical_altercation", "possible_lunge", "possible_person_down", "possible_hands_raised"]
 
-from pydantic import BaseModel, Field
+class Detection(BaseModel):
+    event_type: EventType
+    start_sec: float = Field(ge=0, allow_inf_nan=False)
+    end_sec: float = Field(ge=0, allow_inf_nan=False)
+    description: str
 
+    @model_validator(mode="after")
+    def ordered(self):
+        if self.end_sec < self.start_sec:
+            raise ValueError("Event ends before it starts")
+        return self
 
-class ClaimType(str, Enum):
-    visual = "visual"
-    audio = "audio"
-    subjective = "subjective"
+class Detections(BaseModel):
+    events: list[Detection]
 
+class Candidate(Detection):
+    id: str
+    source_clips: list[int]
 
-class Verdict(str, Enum):
-    supported = "supported"
-    contradicted = "contradicted"
-    not_visible = "not_visible"
+class Detail(BaseModel):
+    status: Literal["retained", "uncertain", "dismissed"]
+    description: str
+    observations: list[str]
+    uncertainty: list[str]
+    confidence: Literal["low", "medium", "high"]
 
+class Event(Candidate):
+    detail: Detail
+    clip_url: str
+    context_start_sec: float
+    context_end_sec: float
 
-# ---------- Gemini-facing ----------
-
-class Claim(BaseModel):
-    id: str = Field(description="c1, c2, ... in report order")
-    text: str = Field(description="Exact wording from the report")
-    actor: str = Field(description="Who acts, e.g. 'officer', 'suspect', 'passenger'")
-    action: str = Field(description="The single action claimed")
-    claim_type: ClaimType
-    sequence_cue: Optional[str] = Field(description="Ordering phrase from the report, or null")
-
-
-class ModelVerdict(BaseModel):
-    claim_id: str
-    verdict: Verdict
-    timestamp_sec: Optional[float] = Field(description="Seconds from clip start where evidence is clearest, or null")
-    person_track_id: Optional[int] = Field(description="id:N overlay of the person the claim concerns, or null")
-    reason: str = Field(description="One factual sentence about what is seen or heard")
-
-
-class SkepticCheck(BaseModel):
-    confirmed: bool
-    reason: str
-
-
-# ---------- Backend-only ----------
-
-class PoseEvent(BaseModel):
-    track_id: int
-    event: str  # hands_raised | arm_extended | hand_at_waist | lying_down
+class Clip(BaseModel):
+    index: int
     start_sec: float
     end_sec: float
 
-
-class ClaimResult(ModelVerdict):
-    evidence_frames: list[str] = []      # URLs relative to API base
-    pose_support: list[PoseEvent] = []   # pose events near timestamp
-    downgraded: bool = False             # skeptic flipped contradicted -> not_visible
-
-
-class AnalysisResult(BaseModel):
-    case_id: str
-    report_text: str
+class Result(BaseModel):
+    id: str
+    filename: str
+    duration_sec: float
     video_url: str
-    annotated_video_url: Optional[str] = None
-    claims: list[Claim]
-    results: list[ClaimResult]
-    pose_events: list[PoseEvent]
+    original_url: str
+    model: str
+    pipeline_version: str = "1"
+    clips: list[Clip]
+    candidates: list[Candidate]
+    events: list[Event]
+
+class Job(BaseModel):
+    id: str
+    filename: str
+    status: Literal["queued", "processing", "complete", "failed"] = "queued"
+    stage: str = "Queued"
+    progress: float = 0
+    error: str | None = None
+    created_at: str

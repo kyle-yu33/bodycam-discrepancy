@@ -37,9 +37,7 @@ logging the change in [`context/decisions.md`](context/decisions.md).
 
 ## Legacy scaffold setup
 
-Pipeline: ffmpeg normalize -> YOLO pose + tracking -> Gemini claim extraction -> Gemini
-verification (annotated video + pose events) -> skeptic re-check on red verdicts ->
-ffmpeg evidence frames -> cached JSON -> Next.js review UI.
+Gemini-only event discovery, matching the two-pass pipeline diagram. No reports or claim comparison.
 
 ### Backend (PowerShell)
     cd backend
