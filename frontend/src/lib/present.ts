@@ -4,52 +4,57 @@ import type { ClaimResult, ClaimType, PoseEvent, Status } from "./ledger";
 
 export const STATUS_ORDER: Status[] = ["potential_inconsistency", "consistent", "insufficient_footage", "outside_assessment"];
 
-// Full class strings (not built dynamically) so Tailwind can see them.
+// Full class strings (not built dynamically) so Tailwind can see them. Only "review" is saturated.
 export const STATUS: Record<Status, {
-  label: string; short: string; badge: string; dot: string; text: string; mark: string; markSelected: string; bar: string; why: string;
+  label: string; short: string; badge: string; dot: string; text: string; tint: string;
+  mark: string; markSelected: string; bar: string; why: string;
 }> = {
-  consistent: {
-    label: "Consistent with visible evidence",
-    short: "Consistent",
-    badge: "bg-consistent-bg text-consistent ring-consistent/25",
-    dot: "bg-consistent",
-    text: "text-consistent",
-    mark: "decoration-consistent/60 hover:bg-consistent-bg/60",
-    markSelected: "bg-consistent-bg ring-2 ring-consistent",
-    bar: "bg-consistent",
-    why: "The footage visibly or audibly matches this claim. That does not confirm every detail of the report.",
-  },
   potential_inconsistency: {
     label: "Potential inconsistency — review recommended",
     short: "Review recommended",
-    badge: "bg-review-bg text-review ring-review/30",
-    dot: "bg-review",
+    badge: "bg-review-bg text-review ring-review/25",
+    dot: "bg-review-bar",
     text: "text-review",
-    mark: "bg-review-bg decoration-review font-medium hover:bg-review-bg/70",
-    markSelected: "bg-review-bg ring-2 ring-review",
-    bar: "bg-review",
+    tint: "bg-review-bg",
+    mark: "bg-review-mark/80 hover:bg-review-mark",
+    markSelected: "bg-review-mark shadow-[inset_0_-2px_0_var(--color-review-bar)]",
+    bar: "bg-review-bar",
     why: "In this window the footage appears incompatible with the claim, and an independent re-check on a clean clip agreed. A person should review this moment. It is not a finding that the report is inaccurate.",
+  },
+  consistent: {
+    label: "Consistent with visible evidence",
+    short: "Consistent",
+    badge: "bg-consistent-bg text-consistent ring-consistent/20",
+    dot: "bg-consistent-bar",
+    text: "text-consistent",
+    tint: "bg-consistent-bg",
+    mark: "underline decoration-dotted decoration-ink/20 underline-offset-[5px] hover:bg-sunken",
+    markSelected: "bg-brand-soft underline decoration-brass decoration-2 underline-offset-[5px]",
+    bar: "bg-consistent-bar",
+    why: "The footage visibly or audibly matches this claim. That does not confirm every detail of the report.",
   },
   insufficient_footage: {
     label: "Insufficient footage to assess",
     short: "Insufficient footage",
-    badge: "bg-insufficient-bg text-insufficient ring-insufficient/25",
-    dot: "bg-insufficient",
+    badge: "bg-insufficient-bg text-insufficient ring-insufficient/20",
+    dot: "bg-insufficient-bar",
     text: "text-insufficient",
-    mark: "decoration-insufficient/50 decoration-dotted hover:bg-insufficient-bg/60",
-    markSelected: "bg-insufficient-bg ring-2 ring-insufficient",
-    bar: "bg-insufficient",
+    tint: "bg-insufficient-bg",
+    mark: "underline decoration-dotted decoration-ink/20 underline-offset-[5px] hover:bg-sunken",
+    markSelected: "bg-brand-soft underline decoration-brass decoration-2 underline-offset-[5px]",
+    bar: "bg-insufficient-bar",
     why: "The footage can't establish this: the moment is off-camera, obscured, too far away or too small to resolve. That is not evidence it didn't happen.",
   },
   outside_assessment: {
     label: "Outside automated assessment",
     short: "Outside assessment",
-    badge: "bg-outside-bg text-outside ring-outside/25",
-    dot: "bg-outside",
+    badge: "bg-outside-bg text-outside ring-outside/20",
+    dot: "bg-outside-bar",
     text: "text-outside",
-    mark: "decoration-outside/50 decoration-dotted hover:bg-outside-bg/60",
-    markSelected: "bg-outside-bg ring-2 ring-outside",
-    bar: "bg-outside",
+    tint: "bg-outside-bg",
+    mark: "underline decoration-dotted decoration-ink/20 underline-offset-[5px] hover:bg-sunken",
+    markSelected: "bg-brand-soft underline decoration-brass decoration-2 underline-offset-[5px]",
+    bar: "bg-outside-bar",
     why: "This is an opinion, a sensation, or a legal conclusion. Automated review deliberately doesn't assess it; that is the correct boundary for this tool.",
   },
 };
@@ -75,23 +80,25 @@ export function windowLabel(r: ClaimResult): string | null {
 
 // ---------- Cases ----------
 
-export const CASE_META: Record<string, { title: string; setting: string; source: string; sourceUrl: string }> = {
+export const CASE_META: Record<string, { title: string; setting: string; camera: string; source: string; sourceUrl: string }> = {
   sfst1: {
     title: "Walk-and-turn test",
     setting: "Night · parking lot",
+    camera: "Axon Body 2",
     source: "Publicly released body-worn camera footage (YouTube 4ThCZOa20wc, 3:40–5:00)",
     sourceUrl: "https://www.youtube.com/watch?v=4ThCZOa20wc&t=220s",
   },
   sfst2: {
     title: "Finger-to-nose test",
     setting: "Station garage",
+    camera: "Axon Body 3",
     source: "Publicly released body-worn camera footage (YouTube mXw1nvF3klk, 15:20–16:20)",
     sourceUrl: "https://www.youtube.com/watch?v=mXw1nvF3klk&t=920s",
   },
 };
 
 export const caseMeta = (id: string) =>
-  CASE_META[id] ?? { title: id, setting: "", source: "Publicly released body-worn camera footage", sourceUrl: "" };
+  CASE_META[id] ?? { title: id, setting: "", camera: "", source: "Publicly released body-worn camera footage", sourceUrl: "" };
 
 // ---------- Report ----------
 
@@ -149,24 +156,6 @@ export function segment(narrative: string, results: ClaimResult[]): Segment[] {
     pos = s.end;
   }
   if (pos < narrative.length) out.push({ text: narrative.slice(pos) });
-  return out;
-}
-
-// ---------- Timeline ----------
-
-/** Greedy lane packing so overlapping claim windows don't hide each other. */
-export function laneOf(results: ClaimResult[]): Map<string, number> {
-  const lanes: number[] = []; // end time per lane
-  const out = new Map<string, number>();
-  const withWindow = results
-    .filter((r) => r.window_start_sec != null && r.window_end_sec != null)
-    .sort((a, b) => a.window_start_sec! - b.window_start_sec!);
-  for (const r of withWindow) {
-    let lane = lanes.findIndex((end) => end <= r.window_start_sec!);
-    if (lane < 0) lane = lanes.push(0) - 1;
-    lanes[lane] = r.window_end_sec!;
-    out.set(r.claim.id, lane);
-  }
   return out;
 }
 
