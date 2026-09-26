@@ -7,7 +7,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from .pipeline import CACHE, run
+from .pipeline import CACHE, GROUND_TRUTH, run
 from .schema import AnalysisResult
 
 app = FastAPI(title="Bodycam Discrepancy Finder")
@@ -18,12 +18,19 @@ app.mount("/media", StaticFiles(directory=CACHE), name="media")
 
 
 @app.post("/analyze", response_model=AnalysisResult)
-def analyze(video: UploadFile = File(...), report_text: str = Form(...), force: bool = Form(False)):
+def analyze(video: UploadFile = File(...), report_text: str = Form(...), force: bool = Form(False),
+            fixture_name: str | None = Form(None)):
+    fixture = None
+    if fixture_name:
+        # Name only (e.g. "copa184" or "copa184.json"); never a path from the client.
+        fixture = GROUND_TRUTH / Path(fixture_name).with_suffix(".json").name
+        if not fixture.is_file():
+            raise HTTPException(400, f"unknown fixture: {fixture.name}")
     suffix = Path(video.filename or "clip.mp4").suffix
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
         shutil.copyfileobj(video.file, tmp)
     try:
-        return run(Path(tmp.name), report_text, force)
+        return run(Path(tmp.name), report_text, force, fixture)
     finally:
         Path(tmp.name).unlink(missing_ok=True)
 

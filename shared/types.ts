@@ -34,6 +34,7 @@ export interface ClaimResult {
 
 export interface AnalysisResult {
   case_id: string;
+  llm_backend: "mock" | "gemini"; // mock results are dev-only, never demo
   report_text: string;
   video_url: string;
   annotated_video_url: string | null;

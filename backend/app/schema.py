@@ -5,7 +5,7 @@ must not have default values -- the Gemini schema converter rejects them.
 Use Optional[...] with no default for nullable fields.
 """
 from enum import Enum
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -63,6 +63,7 @@ class ClaimResult(ModelVerdict):
 
 class AnalysisResult(BaseModel):
     case_id: str
+    llm_backend: Literal["mock", "gemini"]  # mock results are dev-only, never demo
     report_text: str
     video_url: str
     annotated_video_url: Optional[str] = None

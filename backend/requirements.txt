@@ -6,4 +6,5 @@ pydantic>=2
 google-genai
 ultralytics        # pulls torch (CPU on Windows) + opencv-python
 numpy
+lap>=0.5.12        # ByteTrack; ultralytics auto-installs it otherwise
 # mediapipe        # optional comparison; see README

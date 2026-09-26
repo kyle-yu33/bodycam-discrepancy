@@ -13,9 +13,10 @@ def _run(cmd: list[str]) -> None:
 
 
 def normalize(src: Path, dst: Path, max_seconds: int = 30, height: int = 720) -> None:
-    """Trim to max_seconds, downscale, re-encode to browser-safe H.264/AAC MP4."""
+    """Trim to max_seconds, downscale to at most `height` (never upscale), re-encode
+    to browser-safe H.264/AAC MP4."""
     _run(["ffmpeg", "-y", "-i", str(src), "-t", str(max_seconds),
-          "-vf", f"scale=-2:{height}", *H264,
+          "-vf", f"scale=-2:'min({height},ih)'", *H264,
           "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", str(dst)])
 
 
