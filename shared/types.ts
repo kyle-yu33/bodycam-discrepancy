@@ -9,7 +9,6 @@ export interface EvidenceReview {
   status: ReviewStatus;
   evidenceWindow: EvidenceWindow | null;
   observations: string[];
-  uncertaintyReason: string | null;
   frameTimes: number[];
   localizationReason: string | null;
   clip_url: string | null;

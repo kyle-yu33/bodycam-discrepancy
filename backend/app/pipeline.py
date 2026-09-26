@@ -21,10 +21,10 @@ def source_claims(report: str, extracted: ExtractedClaims) -> list[Claim]:
     return claims
 
 
-def abstain(claim: Claim, reason: str, outside: bool = False) -> EvidenceReview:
+def abstain(claim: Claim, outside: bool = False) -> EvidenceReview:
     return EvidenceReview(claimId=claim.id,
         status="outside_automated_assessment" if outside else "insufficient_footage_to_assess",
-        observations=[], frameTimes=[], uncertaintyReason=reason)
+        observations=[], frameTimes=[])
 
 
 def run(original: Path, folder: Path, job_id: str, filename: str, report_text: str, progress) -> Result:
@@ -50,13 +50,11 @@ def run(original: Path, folder: Path, job_id: str, filename: str, report_text: s
             for i, claim in enumerate(claims):
                 progress(f"Reviewing claim {i+1}/{len(claims)}", .2 + .75*i/len(claims))
                 if not claim.assessableByVideo:
-                    reviews.append(abstain(claim,
-                        f"This {claim.category.replace('_', ' ')} claim is outside automated visual assessment.", outside=True))
+                    reviews.append(abstain(claim, outside=True))
                     continue
                 located = gemini.locate(full_video, claim, duration)
                 if located.window is None:
-                    reviews.append(abstain(claim,
-                        f"Unable to locate relevant footage: {located.reason} Absence from footage does not establish that the event did not happen."))
+                    reviews.append(abstain(claim))
                     continue
                 if located.window.endSeconds > duration:
                     raise ValueError("Localization is outside the original recording")

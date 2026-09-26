@@ -35,11 +35,18 @@ export default function Home() {
   const [report, setReport] = useState("");
   const [error, setError] = useState("");
   const [videoError, setVideoError] = useState(false);
+  const [humanConclusions, setHumanConclusions] = useState<Record<string, string>>(() => {
+    if (typeof window === "undefined") return {};
+    try { return JSON.parse(localStorage.getItem("evidencelens-human-conclusions") ?? "{}"); }
+    catch { return {}; }
+  });
   const [uploading, setUploading] = useState(false);
   const player = useRef<HTMLVideoElement>(null);
   const active = useRef<string | null>(null);
   const pendingSeek = useRef<number | null>(null);
   const review = result?.reviews.find(item => item.claimId === selected?.id);
+  const conclusionKey = result && selected ? `${result.id}:${selected.id}` : "";
+  const humanConclusion = conclusionKey ? humanConclusions[conclusionKey] : undefined;
 
   useEffect(() => { api<Job[]>("/analyses").then(setJobs).catch(e => setError(e.message)); }, []);
   useEffect(() => {
@@ -111,6 +118,19 @@ export default function Home() {
     const window = result?.reviews.find(item => item.claimId === claim.id)?.evidenceWindow;
     if (window) seek(window.startSeconds);
   }
+  function setHumanConclusion(value: string) {
+    if (!conclusionKey) return;
+    setHumanConclusions(previous => {
+      const next = { ...previous, [conclusionKey]: value };
+      localStorage.setItem("evidencelens-human-conclusions", JSON.stringify(next));
+      return next;
+    });
+  }
+  function playEvidenceWindow() {
+    if (!review?.evidenceWindow || !player.current) return;
+    seek(review.evidenceWindow.startSeconds);
+    void player.current.play();
+  }
 
   return <div className="shell">
     <aside><Link className="brand" href="/">EvidenceLens</Link><div className="workspace">CLAIM–EVIDENCE REVIEW</div>
@@ -152,10 +172,10 @@ export default function Home() {
             <div className="video-caption"><span>{result.source_url ? `Excerpt timestamps · 00:00 = YouTube ${time(result.source_start_seconds ?? 0)}` : "Original recording timestamps"}</span><a href={API_BASE + result.original_url} target="_blank" rel="noreferrer">{result.source_url ? "Open imported excerpt ↗" : "Open original ↗"}</a></div>
             {result.source_url && <div className="video-caption"><a href={`${result.source_url}&t=${Math.floor((result.source_start_seconds ?? 0) + (review?.evidenceWindow?.startSeconds ?? 0))}s`} target="_blank" rel="noreferrer">YouTube source: {result.source_title ?? result.filename} ↗</a></div>}
             <div className="timeline" aria-label="Selected claim evidence window">{review?.evidenceWindow && <button aria-label="Seek to selected claim evidence" onClick={() => seek(review.evidenceWindow!.startSeconds)} style={{ left: `${review.evidenceWindow.startSeconds/result.duration_sec*100}%`, width: `${(review.evidenceWindow.endSeconds-review.evidenceWindow.startSeconds)/result.duration_sec*100}%` }}/>}</div>
-            <div className="detail">{review?.evidenceWindow ? <><h3>Evidence window</h3><p>{time(review.evidenceWindow.startSeconds)}–{time(review.evidenceWindow.endSeconds)}</p><p>{review.localizationReason}</p><h3>Source-frame references</h3><div className="frame-times">{review.frameTimes.map(t => <button key={t} onClick={() => seek(t)}>Inspect {time(t)}</button>)}</div>{!review.frameTimes.length && <p>No specific source frames identified.</p>}</> : <p>{selected ? "No evidence window available for this claim. The player shows the original recording only." : "Select a report claim to inspect the relevant footage."}</p>}</div>
+            <div className="detail">{review?.evidenceWindow ? <><h3>Evidence window</h3><p>{time(review.evidenceWindow.startSeconds)}–{time(review.evidenceWindow.endSeconds)}</p><p className="muted">AI-generated locator note: {review.localizationReason} This note helps find footage; it is not a confirmed finding.</p><button className="review-action" onClick={playEvidenceWindow}>▶ Play evidence window</button><h3>Source-frame references</h3><div className="frame-times">{review.frameTimes.map(t => <button key={t} onClick={() => seek(t)}>Inspect {time(t)}</button>)}</div>{!review.frameTimes.length && <p>No specific source frames identified.</p>}</> : <p>{selected ? "No evidence window available for this claim. The player shows the original recording only." : "Select a report claim to inspect the relevant footage."}</p>}</div>
           </section>
-          <section className="events detail" aria-live="polite"><h2>Claim–Evidence Ledger</h2>{selected && review ? <><blockquote>{selected.reportText}</blockquote><Badge status={review.status}/><h3>Visible observations</h3>{review.observations.length ? <ul>{review.observations.map((o, i) => <li key={i}>{o}</li>)}</ul> : <p>No visual assessment made.</p>}<h3>Limitations</h3><p>{review.uncertaintyReason ?? "No specific limitation reported by the model. This is not independent verification."}</p>{review.clip_url && <a href={API_BASE + review.clip_url} target="_blank" rel="noreferrer">Open evidence clip ↗</a>}<p><strong>Human review required.</strong> Absence from footage does not establish that an event did not happen.</p></> : <p>Select a claim to view its evidence review.</p>}</section>
-        </div><footer>{result.model} · Pipeline {result.pipeline_version}<a href={API_BASE + `/analyses/${result.id}/result`} target="_blank" rel="noreferrer">View analysis JSON ↗</a></footer></> : !job && <section className="empty"><h2>Start with the report.</h2><p>Add a team-written report and public demo clip. Each claim gets an evidence review or an explicit abstention.</p></section>}
+          <section className="events detail" aria-live="polite"><h2>Final Conclusion</h2>{selected && review ? <><blockquote>{selected.reportText}</blockquote><h3>Final result</h3>{humanConclusion ? <span className={`badge ${humanConclusion === "supported" ? "retained" : "dismissed"}`}>{humanConclusion === "supported" ? "Sufficient footage" : "Insufficient footage"}</span> : <p className="muted">Pending your review</p>}<h3>AI assessment</h3><Badge status={review.status}/><h3>Visible observations</h3>{review.observations.length ? <ul>{review.observations.map((o, i) => <li key={i}>{o}</li>)}</ul> : <p>No visual assessment made.</p>}{review.clip_url && <a href={API_BASE + review.clip_url} target="_blank" rel="noreferrer">Open evidence clip ↗</a>}<p><strong>Review the footage above, then record your conclusion:</strong></p><div className="human-conclusions" role="group" aria-label="Record your conclusion"><button aria-pressed={humanConclusion === "supported"} onClick={() => setHumanConclusion("supported")}>Supported by footage</button><button aria-pressed={humanConclusion === "insufficient"} onClick={() => setHumanConclusion("insufficient")}>Insufficient footage</button></div>{humanConclusion && <p className="muted">Your conclusion is saved in this browser.</p>}<p><strong>Human review required.</strong> Absence from footage does not establish that an event did not happen.</p></> : <p>Select a claim to view its evidence review.</p>}</section>
+        </div><details className="raw-json"><summary>Debug: full analysis JSON</summary><p className="muted">Includes the job record and the complete result returned by the API.</p><pre>{JSON.stringify({ job, analysis: result }, null, 2)}</pre></details><footer>{result.model} · Pipeline {result.pipeline_version}<a href={API_BASE + `/analyses/${result.id}/result`} target="_blank" rel="noreferrer">Open analysis JSON ↗</a></footer></> : !job && <section className="empty"><h2>Start with the report.</h2><p>Add a team-written report and public demo clip. Each claim gets an evidence review or an explicit abstention.</p></section>}
     </main>
   </div>;
 }

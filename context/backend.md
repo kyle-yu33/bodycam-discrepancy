@@ -44,7 +44,6 @@ export type EvidenceReview = {
   status: ReviewStatus;
   evidenceWindow?: EvidenceWindow;
   observations: string[];
-  uncertaintyReason?: string;
   frameTimes: number[];
   humanReviewRequired: true;
 };
@@ -106,7 +105,7 @@ If a candidate exists, use FFmpeg later to make a short clip with source timesta
 
 Input: the atomic claim and only the relevant short clip.
 
-Output: structured observations, source-frame timestamps, uncertainty reason, and approved review status.
+Output: structured observations, source-frame timestamps, and approved review status.
 
 Pass 2 must never output a legal conclusion, a credibility judgment, or a claim of independent verification.
 

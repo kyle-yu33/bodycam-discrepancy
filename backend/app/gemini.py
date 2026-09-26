@@ -81,7 +81,6 @@ conflicts with the concrete assertion, never merely because the action is not se
 insufficient_footage_to_assess for ambiguity, occlusion, uncertain identity, missing
 context, or inability to establish an asserted order; outside_automated_assessment
 for non-visual or subjective/legal claims missed by eligibility classification.
-Audio cannot establish a visual conclusion. Always explain limitations in
-uncertaintyReason (null only when no specific limitation is identified).
+Audio cannot establish a visual conclusion.
 For a visual assessment include observations and actual source-frame times.
 This pass is narrower grounding by the same model, not independent verification."""], Grounding)

@@ -56,7 +56,6 @@ class Grounding(BaseModel):
     """Model response; frame times are relative to the supplied narrow clip."""
     status: ReviewStatus
     observations: list[str]
-    uncertaintyReason: str | None
     frameTimes: list[Seconds]
 
     @model_validator(mode="after")
@@ -64,9 +63,6 @@ class Grounding(BaseModel):
         if self.status in ("consistent_with_visible_evidence", "potential_visual_inconsistency_review_recommended"):
             if not self.observations or not self.frameTimes:
                 raise ValueError("A visual assessment requires observations and source frames")
-        if self.status in ("insufficient_footage_to_assess", "outside_automated_assessment"):
-            if not self.uncertaintyReason or not self.uncertaintyReason.strip():
-                raise ValueError("An abstention requires an explanation")
         return self
 
 

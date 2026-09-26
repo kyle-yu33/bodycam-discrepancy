@@ -55,7 +55,7 @@ class FakeGemini:
 
     def review(self, path, claim, duration):
         self.reviewed.append(claim.id)
-        return Grounding(status="consistent_with_visible_evidence", observations=["Both hands are above shoulder height."], frameTimes=[3, 5], uncertaintyReason=None)
+        return Grounding(status="consistent_with_visible_evidence", observations=["Both hands are above shoulder height."], frameTimes=[3, 5])
 
     def close(self):
         self.closed = True
@@ -134,7 +134,7 @@ class ClaimTests(unittest.TestCase):
 
     def test_reject_out_of_bounds_source_frame(self):
         fake = FakeGemini()
-        fake.review = lambda *args: Grounding(status="consistent_with_visible_evidence", observations=["Hands up"], frameTimes=[12], uncertaintyReason=None)
+        fake.review = lambda *args: Grounding(status="consistent_with_visible_evidence", observations=["Hands up"], frameTimes=[12])
         with self.assertRaisesRegex(ValueError, "frame outside"):
             execute(fake)
         self.assertTrue(fake.closed)
@@ -142,7 +142,7 @@ class ClaimTests(unittest.TestCase):
     def test_unclear_and_inconsistent_results_preserved(self):
         for status in ("insufficient_footage_to_assess", "potential_visual_inconsistency_review_recommended"):
             fake = FakeGemini()
-            fake.review = lambda *args: Grounding(status=status, observations=["Hands are partially visible below waist height."], frameTimes=[3], uncertaintyReason="Partial view; human review needed.")
+            fake.review = lambda *args: Grounding(status=status, observations=["Hands are partially visible below waist height."], frameTimes=[3])
             result, _ = execute(fake)
             self.assertEqual(result.reviews[0].status, status)
 
@@ -153,11 +153,9 @@ class ClaimTests(unittest.TestCase):
             with self.assertRaises(ValidationError):
                 EvidenceWindow(startSeconds=start, endSeconds=end)
         with self.assertRaises(ValidationError):
-            Grounding(status="contradicted", observations=[], frameTimes=[], uncertaintyReason=None)
+            Grounding(status="contradicted", observations=[], frameTimes=[])
         with self.assertRaises(ValidationError):
-            Grounding(status="insufficient_footage_to_assess", observations=[], frameTimes=[], uncertaintyReason=None)
-        with self.assertRaises(ValidationError):
-            EvidenceReview(claimId="claim-1", status="consistent_with_visible_evidence", observations=["Hands up"], frameTimes=[1], uncertaintyReason=None)
+            EvidenceReview(claimId="claim-1", status="consistent_with_visible_evidence", observations=["Hands up"], frameTimes=[1])
 
 
 class APITests(unittest.TestCase):
