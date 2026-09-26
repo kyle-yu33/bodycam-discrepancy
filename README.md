@@ -15,7 +15,18 @@ make legal conclusions. Human review is always required.
 The team's source of truth lives in [`context/`](context/README.md). Read
 [`context/main.md`](context/main.md) before changing scope, and `mvp.md`, `stack.md`, and
 `skeleton.md` before building. `safety.md` and `positioning.md` are guardrails for all UI copy
-and pitch claims.
+and pitch claims. The build plan, workflow and status are in [`docs/PLAN.md`](docs/PLAN.md).
+
+## Claims pipeline (claim-evidence ledger)
+
+From `backend/`, with `GOOGLE_API_KEY` in `backend/.env`:
+
+    python -m app.fetch_clips           # demo clips -> data/clips/
+    python -m app.cases sfst2           # report vs. footage -> data/cases/sfst2/result.json, then scored
+    python -m app.evaluate sfst2        # re-score the latest result against data/ground_truth/sfst2.json
+
+The API serves results at `GET /cases` and `GET /cases/{case}`, media under `/case-media/`.
+Details and tuning knobs: [`docs/PLAN.md`](docs/PLAN.md).
 
 ## Current state of the repo
 
@@ -25,10 +36,10 @@ the scaffold is kept runnable until it is replaced.
 
 | Topic | Scaffold (current code) | Target (`context/`) |
 |---|---|---|
-| Vision layer | Gemini only, via Vertex AI (YOLO removed in `47efabe`) | Gemini + YOLO pose (offline Python preprocessing) as frame-level evidence for physical claims (`stack.md`) |
+| Vision layer | Event API: Gemini only. Claims pipeline: Gemini + YOLO pose (`app/pose.py`) | Gemini + YOLO pose (offline Python preprocessing) as frame-level evidence for physical claims (`stack.md`) |
 | Backend | Python FastAPI on :8000 | Next.js route handler `POST /api/analyze` (`backend.md`) |
-| Result states | Event statuses `retained` / `uncertain` / `dismissed` | 4 approved states, amber for review, no "contradiction" (`frontend.md`) |
-| Claim types | None yet: event discovery only, no report claims | `visual` / `audio` / `documentary` / `subjective_or_legal` |
+| Result states | Event API: `retained` / `uncertain` / `dismissed`. Claims pipeline: the 4 approved states (`app/ledger.py`) | 4 approved states, amber for review, no "contradiction" (`frontend.md`) |
+| Claim types | Claims pipeline: `visual` / `audio` / `documentary` / `subjective_or_legal`. Event API: none | `visual` / `audio` / `documentary` / `subjective_or_legal` |
 | API key | Required (Vertex AI `GOOGLE_API_KEY`) | App must run without one; mock/cached analysis by default (`mvp.md`) |
 | Secrets file | `backend/.env` | `.env.local` (`backend.md`) |
 
