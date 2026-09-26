@@ -8,7 +8,8 @@ CLI (from backend/):
   python -m app.cases sfst2 --repose         # redo normalize + pose (+ transcript)
   python -m app.cases sfst2 --reextract      # redo claim extraction
 Env: CLAIMS_MODEL, CHECK_FPS, SECOND_LOOK_FPS, GEMINI_VIDEO=annotated|clean, POSE_MODEL, POSE_FPS,
-ELEVENLABS_API_KEY (optional: writes transcript.json with word timestamps; skipped without it).
+ELEVENLABS_API_KEY (optional: writes transcript.json with word timestamps, which the checks and the
+second look use as evidence alongside the pose events; skipped without it).
 Scores against data/ground_truth/<case>.json when it exists (see app.evaluate).
 """
 import json
@@ -21,10 +22,10 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")  # before .gemini/.claims read the model env vars
 
 from . import claims as ck  # noqa: E402
-from . import pose, video  # noqa: E402
+from . import evidence, pose, video  # noqa: E402
 from .gemini import Gemini  # noqa: E402
 from .ledger import CaseResult, Claim, ClaimCheck, ClaimResult, PoseEvent
-from .transcribe import transcribe
+from .transcribe import Transcript, transcribe
 
 DATA = Path(os.getenv("DATA_DIR", Path(__file__).resolve().parents[2] / "data"))
 CASES = DATA / "cases"
@@ -56,7 +57,7 @@ def prepare(case: str, src: Path, repose: bool = False, on_pose=None) -> tuple[P
 
 
 def _transcript(clip: Path, out: Path, log) -> None:
-    """Timed ElevenLabs transcript saved beside the case; not used by the claim checks yet."""
+    """Timed ElevenLabs transcript saved beside the case; evidence.py merges it with the pose events for the checks."""
     path = out / "transcript.json"
     if path.exists():
         return
@@ -85,7 +86,7 @@ def _claims(g: Gemini, out: Path, report_text: str, reextract: bool) -> list[Cla
 
 
 def _finish(g: Gemini, case: str, clip: Path, dur: float, claim: Claim, chk: ClaimCheck | None,
-            events: list[PoseEvent], log) -> ClaimResult:
+            events: list[PoseEvent], log, transcript: Transcript | None = None) -> ClaimResult:
     out = CASES / case
     if chk is None:
         r = ClaimResult(claim=claim, status="insufficient_footage", observation="The model returned no check for this claim.")
@@ -114,7 +115,9 @@ def _finish(g: Gemini, case: str, clip: Path, dur: float, claim: Claim, chk: Cla
                 s, e = max(0.0, mid - MIN_WINDOW / 2), min(dur, mid + MIN_WINDOW / 2)
             win = out / f"window_{claim.id}.mp4"
             video.cut(clip, win, s, e, height=480)
-            look = ck.second_look(g, win, claim, s, e, r.window_start_sec, r.window_end_sec)
+            # The re-check sees only the speech and movements inside its own clip, in clip seconds.
+            speech = evidence.speech_section(transcript, events, s, e, offset=s)
+            look = ck.second_look(g, win, claim, s, e, r.window_start_sec, r.window_end_sec, speech)
             r.second_look = look.observation
             log(f"  second look {claim.id} {s:.0f}-{e:.0f}s: {'confirmed' if look.confirmed else 'NOT confirmed'}")
             if not look.confirmed:
@@ -146,6 +149,7 @@ def run(case: str, src: Path, report_text: str, repose: bool = False, reextract:
         (out / "transcript.json").unlink(missing_ok=True)
     step("Transcribing audio", 0.4)
     _transcript(clip, out, log)
+    transcript = evidence.load(out / "transcript.json")
     overlay = os.getenv("GEMINI_VIDEO", "annotated") == "annotated"
     model_video = out / f"model_{'annotated' if overlay else 'clean'}.mp4"
     if not model_video.exists():
@@ -156,13 +160,14 @@ def run(case: str, src: Path, report_text: str, repose: bool = False, reextract:
         step("Splitting the report into claims", 0.5)
         claims = _claims(g, out, report_text, reextract)
         log(f"[{case}] {len(claims)} claims; checking with {ck.CLAIMS_MODEL} at {ck.CHECK_FPS} fps "
-            f"({'pose overlay' if overlay else 'clean video'})")
+            f"({'pose overlay' if overlay else 'clean video'}, {'with' if transcript else 'no'} transcript)")
         step("Checking each claim against the footage", 0.6)
-        checks = {c.claim_id: c for c in ck.check(g, model_video, claims, pose.summarize(events), dur, overlay)}
+        speech = evidence.speech_section(transcript, events)
+        checks = {c.claim_id: c for c in ck.check(g, model_video, claims, pose.summarize(events), dur, overlay, speech)}
         results = []
         for i, c in enumerate(claims):
             step("Re-checking flags and building the ledger", 0.8 + 0.2 * i / max(len(claims), 1))
-            results.append(_finish(g, case, clip, dur, c, checks.get(c.id), events, log))
+            results.append(_finish(g, case, clip, dur, c, checks.get(c.id), events, log, transcript))
     finally:
         g.close()
 
@@ -172,7 +177,7 @@ def run(case: str, src: Path, report_text: str, repose: bool = False, reextract:
     (out / "result.json").write_text(res.model_dump_json(indent=2), encoding="utf-8")
     runs = out / "runs"
     runs.mkdir(exist_ok=True)
-    (runs / f"{datetime.now():%Y%m%d-%H%M%S}_{ck.CLAIMS_MODEL}.json").write_text(res.model_dump_json(indent=2), encoding="utf-8")
+    (runs / f"{datetime.now():%Y%m%d-%H%M%S}_{ck.CLAIMS_MODEL}{'_transcript' if transcript else ''}.json").write_text(res.model_dump_json(indent=2), encoding="utf-8")
     return res
 
 

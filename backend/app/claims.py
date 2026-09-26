@@ -58,6 +58,8 @@ observation: one or two neutral sentences citing seconds. {neutral} {injection}
 {overlay}Automated pose events (noisy and incomplete; left/right are the person's own; the camera moves):
 {pose}
 
+{speech}
+
 CLAIMS:
 {claims}
 """
@@ -72,6 +74,8 @@ SECOND_LOOK_PROMPT = """This clip is seconds {start:.1f}-{end:.1f} of a body-wor
 It bears on this claim from a team-written police report:
 "{text}"
 The claim concerns roughly clip seconds {c0:.1f}-{c1:.1f}; the seconds before and after are context only.
+
+{speech}
 
 Judge only from this clip, including its audio. {observe}
 Would a lawyer watching it clearly see or hear something incompatible with the claim?
@@ -90,16 +94,19 @@ def extract(gemini: Gemini, report_text: str) -> list[Claim]:
 
 
 def check(gemini: Gemini, video: Path, claims: list[Claim], pose_text: str, duration: float,
-          overlay: bool) -> list[ClaimCheck]:
+          overlay: bool, speech: str = "No transcript is available for this video; rely on its audio.") -> list[ClaimCheck]:
+    """speech: evidence.speech_section() for the whole video."""
     listing = "\n".join(f"{c.id} [{c.claim_type}] {c.text}" for c in claims)
     prompt = CHECK_PROMPT.format(dur=duration, neutral=NEUTRAL, injection=INJECTION, observe=OBSERVE,
-                                 overlay=OVERLAY_NOTE if overlay else "", pose=pose_text, claims=listing)
+                                 overlay=OVERLAY_NOTE if overlay else "", pose=pose_text, speech=speech, claims=listing)
     return gemini.generate([video_part(video, CHECK_FPS), prompt], ClaimChecks, model=CLAIMS_MODEL).checks
 
 
 def second_look(gemini: Gemini, window: Path, claim: Claim, start: float, end: float,
-                claim_start: float, claim_end: float) -> SecondLook:
-    """claim_start/claim_end: the first pass's window, in original-video seconds."""
+                claim_start: float, claim_end: float,
+                speech: str = "No transcript is available for this clip; rely on its audio.") -> SecondLook:
+    """claim_start/claim_end: the first pass's window, in original-video seconds.
+    speech: evidence.speech_section() for this window, with times shifted to clip seconds."""
     prompt = SECOND_LOOK_PROMPT.format(start=start, end=end, c0=claim_start - start, c1=claim_end - start,
-                                       text=claim.text, observe=OBSERVE, neutral=NEUTRAL, injection=INJECTION)
+                                       text=claim.text, speech=speech, observe=OBSERVE, neutral=NEUTRAL, injection=INJECTION)
     return gemini.generate([video_part(window, SECOND_LOOK_FPS), prompt], SecondLook, model=CLAIMS_MODEL)
