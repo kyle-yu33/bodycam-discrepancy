@@ -2,6 +2,7 @@
 import json
 import logging
 import os
+import re
 import shutil
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -15,6 +16,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from .schema import Job, Result
 from .pipeline import run
+from .cases import CASES
+from .ledger import CaseResult
 
 DATA = Path(os.getenv("DATA_DIR", Path(__file__).resolve().parents[2] / "data")) / "analyses"
 DATA.mkdir(parents=True, exist_ok=True)
@@ -114,3 +117,28 @@ def get_result(job_id: str):
     if not path.exists():
         raise HTTPException(409, "Analysis is not complete")
     return Result.model_validate_json(path.read_text())
+
+# ---------- Claim-evidence ledger: precomputed demo cases (python -m app.cases <case>) ----------
+
+CASES.mkdir(parents=True, exist_ok=True)
+app.mount("/case-media", StaticFiles(directory=CASES), name="case-media")
+
+def case_result(case: str) -> CaseResult:
+    path = CASES / case / "result.json"
+    if not re.fullmatch(r"[a-z0-9_-]+", case) or not path.exists():
+        raise HTTPException(404, "Unknown case")
+    return CaseResult.model_validate_json(path.read_text(encoding="utf-8"))
+
+@app.get("/cases")
+def list_cases():
+    out = []
+    for path in sorted(CASES.glob("*/result.json")):
+        res = case_result(path.parent.name)
+        counts = {s: sum(r.status == s for r in res.results) for s in
+                  ("consistent", "potential_inconsistency", "insufficient_footage", "outside_assessment")}
+        out.append({"case": res.case, "model": res.model, "created_at": res.created_at, "claims": len(res.results), **counts})
+    return out
+
+@app.get("/cases/{case}", response_model=CaseResult)
+def get_case(case: str):
+    return case_result(case)

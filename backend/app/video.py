@@ -23,8 +23,20 @@ def duration(path: Path) -> float:
 def normalize(src: Path, dst: Path):
     run(["ffmpeg", "-y", "-i", str(src), "-map", "0:v:0", "-map", "0:a:0?", "-vf", "scale=-2:'min(720,ih)'", *ENCODE, str(dst)])
 
-def cut(src: Path, dst: Path, start: float, end: float):
-    run(["ffmpeg", "-y", "-ss", str(start), "-i", str(src), "-t", str(end-start), "-map", "0:v:0", "-map", "0:a:0?", *ENCODE, str(dst)])
+def cut(src: Path, dst: Path, start: float, end: float, height: int | None = None):
+    scale = ["-vf", f"scale=-2:'min({height},ih)'"] if height else []
+    run(["ffmpeg", "-y", "-ss", str(start), "-i", str(src), "-t", str(end-start), "-map", "0:v:0", "-map", "0:a:0?", *scale, *ENCODE, str(dst)])
+
+def for_model(src: Path, dst: Path, height: int = 480):
+    """Smaller copy for Gemini: Vertex AI takes video inline only (15 MB cap)."""
+    run(["ffmpeg", "-y", "-i", str(src), "-map", "0:v:0", "-map", "0:a:0?", "-vf", f"scale=-2:'min({height},ih)'", *ENCODE, str(dst)])
+
+def mux_audio(silent: Path, with_audio: Path, dst: Path):
+    """OpenCV writes mp4v video without audio; re-encode to H.264 and copy the audio back in."""
+    run(["ffmpeg", "-y", "-i", str(silent), "-i", str(with_audio), "-map", "0:v:0", "-map", "1:a:0?", *ENCODE, "-shortest", str(dst)])
+
+def frame(src: Path, t: float, dst: Path):
+    run(["ffmpeg", "-y", "-ss", f"{max(t, 0):.2f}", "-i", str(src), "-frames:v", "1", "-q:v", "2", str(dst)])
 
 def windows(duration_sec: float, size: float = 30, overlap: float = 10) -> list[Clip]:
     if duration_sec <= 0 or not 0 <= overlap < size:
