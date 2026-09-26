@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import type { CaseSummary, Status } from "@/lib/ledger";
+import type { CaseSummary, Origin, Status } from "@/lib/ledger";
 import { STATUS, STATUS_ORDER, caseMeta } from "@/lib/present";
 
 export type Phase = "loading" | "ready" | "analyzing" | "loaded" | "failed";
@@ -34,9 +34,10 @@ const PHASE_LABEL: Record<Phase, string> = {
   failed: "Analysis failed",
 };
 
-export function Header({ caseId, cases, phase, onAnalyze, onHow }: {
-  caseId: string; cases: CaseSummary[]; phase: Phase; onAnalyze: () => void; onHow: () => void;
+export function Header({ caseId, cases, phase, origin, onAnalyze, onHow }: {
+  caseId: string; cases: CaseSummary[]; phase: Phase; origin: Origin; onAnalyze: () => void; onHow: () => void;
 }) {
+  const uploaded = origin === "upload";
   return (
     <header className="flex flex-wrap items-center gap-x-6 gap-y-3 border-b border-line bg-card px-5 py-3">
       <Link href="/" className="flex items-center gap-2.5">
@@ -54,25 +55,30 @@ export function Header({ caseId, cases, phase, onAnalyze, onHow }: {
       </nav>
 
       <div className="ml-auto flex flex-wrap items-center gap-2 text-xs">
-        <span className="rounded-full border border-line px-2.5 py-1 text-muted">Demo case: public footage, team-written report</span>
+        <span className="rounded-full border border-line px-2.5 py-1 text-muted">
+          {uploaded ? "Uploaded case" : "Demo case: public footage, team-written report"}
+        </span>
         <span className="rounded-full bg-ink px-2.5 py-1 font-medium text-white">Human review required</span>
         <span className="flex items-center gap-1.5 px-1 text-muted" aria-live="polite">
           <span className={`h-2 w-2 rounded-full ${phase === "loaded" ? "bg-consistent" : phase === "analyzing" ? "animate-pulse bg-review" : phase === "failed" ? "bg-review" : "bg-insufficient"}`} />
           {PHASE_LABEL[phase]}
         </span>
         <button onClick={onHow} className="rounded-lg border border-line px-3 py-2 text-sm hover:bg-paper">How it works</button>
-        <button onClick={onAnalyze} disabled={phase === "analyzing" || phase === "loading"}
-          className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white shadow-sm hover:brightness-110 disabled:cursor-wait disabled:opacity-60">
-          {phase === "analyzing" ? "Analyzing…" : phase === "loaded" ? "Analyze again" : "Analyze case"}
-        </button>
+        <Link href="/new" className="rounded-lg border border-line px-3 py-2 text-sm hover:bg-paper">New case</Link>
+        {!uploaded && (
+          <button onClick={onAnalyze} disabled={phase === "analyzing" || phase === "loading"}
+            className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white shadow-sm hover:brightness-110 disabled:cursor-wait disabled:opacity-60">
+            {phase === "analyzing" ? "Analyzing…" : phase === "loaded" ? "Analyze again" : "Analyze case"}
+          </button>
+        )}
       </div>
     </header>
   );
 }
 
-export function SummaryBar({ counts, total, filter, setFilter, model, createdAt }: {
+export function SummaryBar({ counts, total, filter, setFilter, model, createdAt, origin }: {
   counts: Record<Status, number>; total: number; filter: Status | null; setFilter: (s: Status | null) => void;
-  model: string; createdAt: string;
+  model: string; createdAt: string; origin: Origin;
 }) {
   return (
     <div className="el-fade-up flex flex-wrap items-center gap-2 border-b border-line bg-card/60 px-5 py-2.5">
@@ -88,7 +94,7 @@ export function SummaryBar({ counts, total, filter, setFilter, model, createdAt 
       ))}
       {filter && <button onClick={() => setFilter(null)} className="text-xs text-muted underline">Show all</button>}
       <span className="ml-auto text-xs text-muted">
-        Cached analysis · {model} · {new Date(createdAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}
+        {origin === "upload" ? "Analysis" : "Cached analysis"} · {model} · {new Date(createdAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}
       </span>
     </div>
   );

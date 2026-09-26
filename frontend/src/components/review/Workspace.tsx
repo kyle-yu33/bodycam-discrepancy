@@ -41,10 +41,12 @@ export function Workspace({ caseId }: { caseId: string }) {
         setCases(cs);
         setError("");
         const q = new URLSearchParams(window.location.search);
-        setPhase(q.has("instant") ? "loaded" : "ready");
+        // Uploaded cases were just analyzed for real, so there is no cached replay to show.
+        const instant = q.has("instant") || d.origin === "upload";
+        setPhase(instant ? "loaded" : "ready");
         // ?instant=1&claim=c7 opens straight onto one claim (recordings, fallback during the demo).
         const claim = d.results.find((r) => r.claim.id === q.get("claim"));
-        if (q.has("instant") && claim) {
+        if (instant && claim) {
           setSelectedId(claim.claim.id);
           resume.current = { t: Math.max(0, (claim.window_start_sec ?? 0) - LEAD_IN), play: false };
         }
@@ -168,9 +170,10 @@ export function Workspace({ caseId }: { caseId: string }) {
 
   return (
     <div className="flex min-h-screen flex-col lg:h-screen">
-      <Header caseId={caseId} cases={cases} phase={phase} onAnalyze={analyze} onHow={() => setHow(true)} />
+      <Header caseId={caseId} cases={cases} phase={phase} origin={data?.origin ?? "demo"} onAnalyze={analyze} onHow={() => setHow(true)} />
       {revealed && data && (
-        <SummaryBar counts={counts} total={results.length} filter={filter} setFilter={setFilter} model={data.model} createdAt={data.created_at} />
+        <SummaryBar counts={counts} total={results.length} filter={filter} setFilter={setFilter} model={data.model}
+          createdAt={data.created_at} origin={data.origin} />
       )}
 
       <div className="flex items-baseline gap-3 px-5 pt-3">
