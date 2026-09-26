@@ -110,7 +110,7 @@ bodycam-discrepancy/
       pipeline.py           orchestration + cache; CLI
       main.py               FastAPI: POST /analyze, GET /cases, GET /cases/{id}, static /media
       eval.py               OLD ground-truth format; runs at import time (Task 2 rewrites it)
-      fetch_clips.py        NEW: pulls single videos out of the HF dataset zips via HTTP Range
+      fetch_clips.py        NEW: downloads YouTube sections with yt-dlp into data/clips/
   shared/types.ts           TS mirror of schema.py
   frontend/                 Next.js skeleton (another teammate owns it); src/lib/types.ts is a copy of shared/types.ts
   data/
