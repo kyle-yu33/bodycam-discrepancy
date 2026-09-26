@@ -25,15 +25,19 @@ export default function Home() {
   return (
     <main className="flex min-h-screen items-center justify-center p-6">
       <div className="max-w-md text-center">
-        <p className="text-lg font-semibold">EvidenceLens</p>
-        <p className="mt-2 text-sm text-muted">
-          {error || (empty ? "No analyzed cases yet. Upload a clip and its report to analyze your first case." : "Opening the demo case…")}
+        <p className="font-serif text-3xl font-semibold tracking-tight text-ink">EvidenceLens</p>
+        <p className="mt-3 text-sm leading-6 text-muted">
+          {error || (empty ? "No analyzed cases yet. Upload a clip and its report to analyze your first case." : "Opening the case…")}
         </p>
         {empty && (
-          <Link href="/new" className="mt-4 inline-block rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white">New case</Link>
+          <Link href="/new" className="mt-5 inline-flex h-9 items-center rounded-md bg-brand px-4 text-sm font-medium text-white hover:bg-brand-hi">
+            New case
+          </Link>
         )}
         {error && (
-          <button onClick={() => location.reload()} className="mt-4 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white">Retry</button>
+          <button onClick={() => location.reload()} className="mt-5 inline-flex h-9 items-center rounded-md bg-brand px-4 text-sm font-medium text-white hover:bg-brand-hi">
+            Try again
+          </button>
         )}
       </div>
     </main>

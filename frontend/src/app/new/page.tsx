@@ -26,7 +26,7 @@ function AnalysisQueue({ mine, onStopMine }: { mine?: string; onStopMine: () => 
   const others = finished.filter((j) => j.id !== mine);
   if (!active.length && !others.length) return null;
   return (
-    <section className="mt-6 rounded-xl border border-line bg-card p-5" aria-live="polite">
+    <section className="mt-6 rounded-xl border border-hairline bg-surface p-5" aria-live="polite">
       <h2 className="text-sm font-semibold">Analysis queue</h2>
       <p className="mb-3 mt-0.5 text-xs text-muted">Cases run one at a time, in upload order.</p>
       <QueueList active={active} finished={others} mine={mine} onDismiss={dismiss} stopping={stopping}
@@ -129,7 +129,7 @@ export default function NewCase() {
 
   return (
     <div className="min-h-screen">
-      <header className="flex items-center gap-4 border-b border-line bg-card px-5 py-3">
+      <header className="flex items-center gap-4 border-b border-hairline bg-surface px-5 py-3">
         <Link href="/" className="text-lg font-semibold tracking-tight">EvidenceLens</Link>
         <span className="text-sm text-muted">New case</span>
         <span className="ml-auto rounded-full bg-ink px-2.5 py-1 text-xs font-medium text-white">Human review required</span>
@@ -155,33 +155,33 @@ export default function NewCase() {
         )}
 
         {running || job?.status === "complete" ? (
-          <section className="el-fade-up mt-6 rounded-xl border border-line bg-card p-5" aria-live="polite">
+          <section className="el-fade-up mt-6 rounded-xl border border-hairline bg-surface p-5" aria-live="polite">
             <h2 className="text-base font-semibold">Analyzing {job.filename}</h2>
             <p className="mt-1 text-sm text-muted">
               {job.status === "complete" ? "Done. Opening the review…"
                 : job.status === "queued" ? "Waiting for another analysis to finish. Cases run one at a time."
                 : job.stage}
             </p>
-            <div className="mt-4 h-2 overflow-hidden rounded-full bg-paper">
+            <div className="mt-4 h-2 overflow-hidden rounded-full bg-sunken">
               <div className="h-full rounded-full bg-brand transition-all duration-700" style={{ width: `${Math.round(job.progress * 100)}%` }} />
             </div>
             <p className="mt-3 text-xs text-muted">
               {elapsed} s elapsed · usually 2 to 5 minutes. You can leave this page; the case appears in the case list when it&apos;s done.
             </p>
             {running && (
-              <button onClick={stopMine} className="mt-4 rounded-lg border border-line px-3 py-1.5 text-sm text-review hover:bg-review-bg">
+              <button onClick={stopMine} className="mt-4 rounded-lg border border-hairline px-3 py-1.5 text-sm text-review hover:bg-review-bg">
                 Stop analysis
               </button>
             )}
           </section>
         ) : (
-          <form onSubmit={submit} className="mt-6 space-y-5 rounded-xl border border-line bg-card p-5">
+          <form onSubmit={submit} className="mt-6 space-y-5 rounded-xl border border-hairline bg-surface p-5">
             <label className="block">
               <span className="text-sm font-medium">Footage</span>
               <span className="block text-xs text-muted">MP4 or MOV with its original audio, {MAX_CLIP_SEC} seconds or less.</span>
               <input type="file" accept=".mp4,.mov,video/mp4,video/quicktime" required
                 onChange={(e) => pickVideo(e.target.files?.[0] ?? null)}
-                className="mt-2 block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-paper file:px-3 file:py-2 file:text-sm" />
+                className="mt-2 block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-sunken file:px-3 file:py-2 file:text-sm" />
               {tooLong && (
                 <span className="mt-1 block text-xs text-review">
                   This clip is {Math.round(duration!)} s long. Trim it to {MAX_CLIP_SEC} s or less first.
@@ -201,13 +201,13 @@ export default function NewCase() {
               <span className="block text-xs text-muted">Paste the narrative, or attach a text file and edit it here.</span>
               <textarea id="report" value={report} onChange={(e) => setReport(e.target.value)} rows={10} required
                 placeholder="I conducted a traffic stop on…"
-                className="mt-2 block w-full rounded-lg border border-line bg-paper p-3 text-sm" />
+                className="mt-2 block w-full rounded-lg border border-hairline bg-sunken p-3 text-sm" />
             </div>
 
             <label className="block">
               <span className="text-sm font-medium">Case name <span className="font-normal text-muted">(optional)</span></span>
               <input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} placeholder="e.g. traffic-stop-3"
-                className="mt-2 block w-full rounded-lg border border-line bg-paper px-3 py-2 text-sm" />
+                className="mt-2 block w-full rounded-lg border border-hairline bg-sunken px-3 py-2 text-sm" />
             </label>
 
             {job?.status === "failed" && (
@@ -215,7 +215,7 @@ export default function NewCase() {
                 The analysis couldn&apos;t finish: {job.error ?? "unknown error"}. Check the backend log, then try again.
               </p>
             )}
-            {notice && <p className="rounded-lg bg-paper p-3 text-sm" role="status">{notice}</p>}
+            {notice && <p className="rounded-lg bg-sunken p-3 text-sm" role="status">{notice}</p>}
             {error && <p className="rounded-lg bg-review-bg p-3 text-sm text-review" role="alert">{error}</p>}
 
             <div className="flex items-center gap-3">
@@ -226,7 +226,7 @@ export default function NewCase() {
               <Link href="/" className="text-sm text-muted hover:text-ink">Cancel</Link>
             </div>
 
-            <p className="rounded-lg bg-paper p-3 text-xs text-muted">
+            <p className="rounded-lg bg-sunken p-3 text-xs text-muted">
               Use publicly released footage only. Processing runs on this computer; the footage is sent to Gemini for analysis
               (and its audio to ElevenLabs for a transcript, if the server has that key).
               Results point to moments worth reviewing; they are not legal conclusions.

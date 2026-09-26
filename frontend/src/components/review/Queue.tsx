@@ -81,14 +81,14 @@ export function QueueList({ active, finished = [], mine, onDismiss, onStop, stop
               {j.status === "processing" ? "Running" : queuedLabel(active.slice(0, i).filter((x) => x.status === "queued").length)}
               {onStop && (
                 <button onClick={() => onStop(j.id)} disabled={stopping?.has(j.id)}
-                  className="rounded border border-line px-1.5 py-0.5 text-review hover:bg-review-bg disabled:opacity-60">
+                  className="rounded border border-hairline px-1.5 py-0.5 text-review hover:bg-review-bg disabled:opacity-60">
                   {stopping?.has(j.id) ? "Stopping…" : "Stop"}
                 </button>
               )}
             </span>
           </div>
           <p className="text-xs text-muted">{stopping?.has(j.id) ? "Stopping after the current step" : j.status === "processing" ? j.stage : "Waiting to start"}</p>
-          <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-paper">
+          <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-sunken">
             <div className="h-full rounded-full bg-brand transition-all duration-700" style={{ width: `${Math.round(j.progress * 100)}%` }} />
           </div>
         </li>
@@ -140,13 +140,13 @@ export function QueueMenu({ onComplete }: { onComplete?: (job: CaseJob) => void 
   return (
     <div ref={box} className="relative">
       <button onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-haspopup="dialog"
-        className="flex items-center gap-1.5 rounded-lg border border-line px-3 py-2 text-sm hover:bg-paper">
+        className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-md border border-hairline px-3 text-sm text-ink-2 transition-colors hover:bg-sunken">
         <span className={`h-2 w-2 rounded-full ${active.length ? "animate-pulse bg-review" : ready ? "bg-consistent" : "bg-review"}`} aria-hidden />
         {label}
       </button>
       {open && (
         <div role="dialog" aria-label="Analysis queue"
-          className="absolute right-0 top-full z-30 mt-2 w-80 rounded-xl border border-line bg-card p-4 text-left shadow-lg">
+          className="absolute right-0 top-full z-30 mt-2 w-80 rounded-lg border border-hairline bg-raised p-4 text-left shadow-2xl">
           <h2 className="text-sm font-semibold">Analysis queue</h2>
           <p className="mb-3 mt-0.5 text-xs text-muted">Cases run one at a time, in upload order.</p>
           <QueueList active={active} finished={finished} onDismiss={dismiss} onStop={stop} stopping={stopping} />

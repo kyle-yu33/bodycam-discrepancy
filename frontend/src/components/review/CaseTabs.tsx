@@ -31,9 +31,6 @@ function useClosedCases() {
   };
 }
 
-const tabClass = (current: boolean) =>
-  `rounded-md px-3 py-1.5 text-sm transition ${current ? "bg-card font-medium shadow-sm" : "text-muted hover:text-ink"}`;
-
 export function CaseTabs({ caseId, cases }: { caseId: string; cases: CaseSummary[] }) {
   const router = useRouter();
   const { closed, close, reopen } = useClosedCases();
@@ -68,42 +65,38 @@ export function CaseTabs({ caseId, cases }: { caseId: string; cases: CaseSummary
     router.push(`/cases/${encodeURIComponent(id)}`);
   }
 
-  if (!cases.length) {
-    return (
-      <nav className="flex gap-1 rounded-lg bg-paper p-1" aria-label="Cases">
-        <span className={tabClass(true)}>{caseMeta(caseId).title}</span>
-      </nav>
-    );
-  }
+  const tabs = cases.length ? open : [{ case: caseId, origin: "demo" } as CaseSummary];
 
   return (
-    <nav className="flex flex-wrap items-center gap-1 rounded-lg bg-paper p-1" aria-label="Cases">
-      {open.map((c) => {
-        const current = c.case === caseId;
-        return (
-          <span key={c.case} className={`flex items-center ${tabClass(current)} ${c.origin === "upload" ? "pr-1.5" : ""}`}>
-            <Link href={`/cases/${encodeURIComponent(c.case)}`} aria-current={current ? "page" : undefined}>
-              {caseMeta(c.case).title}
-            </Link>
-            {c.origin === "upload" && (
-              <button onClick={() => closeTab(c.case)} aria-label={`Close ${c.case} tab`} title="Close tab (the case is kept)"
-                className="ml-1.5 rounded px-1 leading-none text-muted hover:bg-paper hover:text-ink">×</button>
-            )}
-          </span>
-        );
-      })}
+    <>
+      <nav className="flex h-full min-w-0 items-stretch gap-5 overflow-x-auto border-l border-hairline pl-4 sm:pl-6" aria-label="Matters">
+        {tabs.map((c) => {
+          const current = c.case === caseId;
+          return (
+            <span key={c.case} className={`flex items-center gap-1.5 whitespace-nowrap border-b-2 text-sm transition-colors ${current ? "border-brass font-medium text-ink" : "border-transparent text-muted hover:text-ink"}`}>
+              <Link href={`/cases/${encodeURIComponent(c.case)}`} aria-current={current ? "page" : undefined}>
+                {caseMeta(c.case).title}
+              </Link>
+              {c.origin === "upload" && (
+                <button onClick={() => closeTab(c.case)} aria-label={`Close ${c.case} tab`} title="Close tab (the case is kept)"
+                  className="rounded px-1 leading-none text-muted transition-colors hover:bg-sunken hover:text-ink">×</button>
+              )}
+            </span>
+          );
+        })}
+      </nav>
       {hidden.length > 0 && (
-        <div ref={box} className="relative">
+        <div ref={box} className="relative shrink-0">
           <button onClick={() => setMenu((m) => !m)} aria-expanded={menu} aria-haspopup="menu"
-            className="rounded-md px-3 py-1.5 text-sm text-muted hover:text-ink">
+            className="inline-flex h-9 items-center whitespace-nowrap rounded-md px-2.5 text-sm text-muted transition-colors hover:bg-sunken hover:text-ink">
             {hidden.length} closed ▾
           </button>
           {menu && (
-            <div role="menu" className="absolute left-0 top-full z-30 mt-2 w-64 rounded-xl border border-line bg-card p-2 shadow-lg">
+            <div role="menu" className="absolute left-0 top-full z-30 mt-2 w-64 rounded-lg border border-hairline bg-raised p-2 shadow-2xl">
               <p className="px-2 pb-1 pt-0.5 text-xs text-muted">Closed uploads. Open one to bring its tab back.</p>
               {hidden.map((c) => (
                 <button key={c.case} role="menuitem" onClick={() => reopenTab(c.case)}
-                  className="flex w-full items-baseline justify-between gap-3 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-paper">
+                  className="flex w-full items-baseline justify-between gap-3 rounded-md px-2 py-1.5 text-left text-sm text-ink-2 hover:bg-sunken">
                   <span className="truncate">{caseMeta(c.case).title}</span>
                   <span className="shrink-0 text-xs text-muted">{c.claims} claims</span>
                 </button>
@@ -112,6 +105,6 @@ export function CaseTabs({ caseId, cases }: { caseId: string; cases: CaseSummary
           )}
         </div>
       )}
-    </nav>
+    </>
   );
 }
