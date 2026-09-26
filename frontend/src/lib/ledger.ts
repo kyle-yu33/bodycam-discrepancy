@@ -31,8 +31,11 @@ export interface ClaimResult {
   pose_events: PoseEvent[];
 }
 
+export type Origin = "demo" | "upload"; // upload = analyzed from the frontend via POST /cases
+
 export interface CaseResult {
   case: string;
+  origin: Origin;
   model: string;
   created_at: string;
   report_text: string;
@@ -45,6 +48,7 @@ export interface CaseResult {
 
 export interface CaseSummary {
   case: string;
+  origin: Origin;
   model: string;
   created_at: string;
   claims: number;
@@ -54,12 +58,28 @@ export interface CaseSummary {
   outside_assessment: number;
 }
 
+// Background analysis of an uploaded case (GET /cases/{case}/job).
+export interface CaseJob {
+  id: string; // the case id
+  filename: string;
+  status: "queued" | "processing" | "complete" | "failed";
+  stage: string;
+  progress: number; // 0..1
+  error: string | null;
+  created_at: string;
+}
+
+export interface Health {
+  gemini_configured: boolean;
+  ffmpeg_available: boolean;
+}
+
 export const media = (path: string) => API_BASE + path;
 
-async function get<T>(path: string): Promise<T> {
+async function get<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(API_BASE + path, { cache: "no-store" });
+    res = await fetch(API_BASE + path, { cache: "no-store", ...init });
   } catch {
     throw new Error(`Can't reach the analysis server at ${API_BASE}. Start it from backend/ with: uvicorn app.main:app --port 8000`);
   }
@@ -72,3 +92,10 @@ async function get<T>(path: string): Promise<T> {
 
 export const listCases = () => get<CaseSummary[]>("/cases");
 export const getCase = (id: string) => get<CaseResult>(`/cases/${encodeURIComponent(id)}`);
+export const getHealth = () => get<Health>("/health");
+// form fields: video (file), report_text and/or report (.txt file), name (optional)
+export const createCase = (form: FormData) => get<CaseJob>("/cases", { method: "POST", body: form });
+export const getCaseJob = (id: string) => get<CaseJob>(`/cases/${encodeURIComponent(id)}/job`);
+export const listCaseJobs = () => get<CaseJob[]>("/case-jobs");
+// Deletes the upload: at once if queued, at the next checkpoint (about a second) if running.
+export const stopCase = (id: string) => get<CaseJob>(`/cases/${encodeURIComponent(id)}/stop`, { method: "POST" });

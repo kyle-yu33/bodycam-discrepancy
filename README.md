@@ -17,8 +17,27 @@ The team's source of truth lives in [`context/`](context/README.md). Read
 `skeleton.md` before building. `safety.md` and `positioning.md` are guardrails for all UI copy
 and pitch claims. The build plan, workflow and status are in [`docs/PLAN.md`](docs/PLAN.md).
 
+## Quick start: analyze your own clip
+
+You only need the backend and the frontend running. Requirements: Python 3.11+, Node 20+, FFmpeg
+on `PATH`, and `GOOGLE_API_KEY` (Vertex AI) in `backend/.env`. `ELEVENLABS_API_KEY` is optional
+and adds a timed transcript.
+
+    cd backend
+    .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000
+
+    cd frontend
+    npm install
+    npm run dev                 # http://localhost:3000/new
+
+On `/new`, choose an MP4/MOV clip (90 s or less), paste the report or attach a `.txt`, and click
+Analyze. The frontend sends `POST /cases`; the backend runs the analysis as a background job
+(about 2 to 5 minutes) while the page polls `GET /cases/{case}/job`, then opens the ledger.
+Uploads must be publicly released footage (`context/safety.md`).
+
 ## Claims pipeline (claim-evidence ledger)
 
+The demo cases (`sfst1`, `sfst2`) are prepared from the command line and replayed from cache.
 From `backend/`, with `GOOGLE_API_KEY` in `backend/.env`:
 
     python -m app.fetch_clips           # demo clips -> data/clips/
@@ -26,6 +45,7 @@ From `backend/`, with `GOOGLE_API_KEY` in `backend/.env`:
     python -m app.evaluate sfst2        # re-score the latest result against data/ground_truth/sfst2.json
 
 The API serves results at `GET /cases` and `GET /cases/{case}`, media under `/case-media/`.
+`POST /cases` and `GET /cases/{case}/job` run the same pipeline on an upload.
 Details and tuning knobs: [`docs/PLAN.md`](docs/PLAN.md).
 
 ## Current state of the repo

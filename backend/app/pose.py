@@ -183,14 +183,16 @@ def to_intervals(hits: dict, gap: float) -> list[PoseEvent]:
     return sorted(out, key=lambda e: (e.start_sec, e.track_id, e.event))
 
 
-def analyze(video_path: Path, out_dir: Path, sample_fps: float = SAMPLE_FPS) -> tuple[list[PoseEvent], Path]:
+def analyze(video_path: Path, out_dir: Path, sample_fps: float = SAMPLE_FPS, on_frame=None) -> tuple[list[PoseEvent], Path]:
     """Writes out_dir/pose_raw.mp4 (overlay, no audio) and out_dir/pose_features.csv.
-    Returns (events, overlay path)."""
+    Returns (events, overlay path). on_frame(fraction_done) is called after each sampled frame."""
     out_dir.mkdir(parents=True, exist_ok=True)
     cap = cv2.VideoCapture(str(video_path))
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+    total = cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0
     cap.release()
     stride = max(1, round(fps / sample_fps))
+    sampled = max(1, total / stride)
     dt = stride / fps
 
     raw_path = out_dir / "pose_raw.mp4"
@@ -240,6 +242,12 @@ def analyze(video_path: Path, out_dir: Path, sample_fps: float = SAMPLE_FPS) -> 
         if writer is None:
             writer = cv2.VideoWriter(str(raw_path), cv2.VideoWriter_fourcc(*"mp4v"), 1 / dt, (w, h))
         writer.write(frame)
+        if on_frame:
+            try:
+                on_frame(min(1.0, (i + 1) / sampled))
+            except BaseException:  # stopped: release the file so the case folder can be deleted
+                writer.release()
+                raise
     if writer is not None:
         writer.release()
 

@@ -11,12 +11,12 @@ const FRAME = 1 / 30; // one frame at 30 fps
 
 /** The viewing room: the footage on a dark stage, with its own controls, captions and timeline. */
 export function EvidenceViewer({ results, duration, selected, revealed, overlay, setOverlay, expanded, setExpanded,
-  videoRef, src, poster, onSeek, onTimeUpdate, onLoadedMetadata, camera, source, sourceUrl }: {
+  videoRef, src, poster, onSeek, onTimeUpdate, onLoadedMetadata, camera, source, sourceUrl, uploaded }: {
   results: ClaimResult[]; duration: number; selected: ClaimResult | null; revealed: boolean;
   overlay: boolean; setOverlay: (v: boolean) => void; expanded: boolean; setExpanded: (v: boolean) => void;
   videoRef: RefObject<HTMLVideoElement | null>; src?: string; poster?: string;
   onSeek: (t: number) => void; onTimeUpdate: () => void; onLoadedMetadata: () => void;
-  camera: string; source: string; sourceUrl: string;
+  camera: string; source: string; sourceUrl: string; uploaded: boolean;
 }) {
   const [time, setTime] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -167,8 +167,13 @@ export function EvidenceViewer({ results, duration, selected, revealed, overlay,
       </div>
 
       <p className="shrink-0 px-1 text-[11px] leading-5 text-muted">
-        Source: {sourceUrl ? <a href={sourceUrl} target="_blank" rel="noreferrer" className="underline decoration-hairline underline-offset-2 hover:text-ink">{source}</a> : source}.
-        {" "}Report: fictional, written by our team. Timestamps are approximate; review the footage around each window.
+        {uploaded ? "Footage and report: uploaded for this case." : (
+          <>
+            Source: {sourceUrl ? <a href={sourceUrl} target="_blank" rel="noreferrer" className="underline decoration-hairline underline-offset-2 hover:text-ink">{source}</a> : source}.
+            {" "}Report: fictional, written by our team.
+          </>
+        )}
+        {" "}Timestamps are approximate; review the footage around each window.
       </p>
     </section>
   );

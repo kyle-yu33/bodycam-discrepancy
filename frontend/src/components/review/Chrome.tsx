@@ -1,8 +1,10 @@
 "use client";
 import Link from "next/link";
-import type { CaseSummary, Status } from "@/lib/ledger";
+import type { CaseSummary, Origin, Status } from "@/lib/ledger";
 import { STATUS, STATUS_ORDER, caseMeta } from "@/lib/present";
+import { CaseTabs } from "./CaseTabs";
 import { CheckIcon, CloseIcon, HelpIcon, ShieldCheck } from "./Icons";
+import { QueueMenu } from "./Queue";
 
 export type Phase = "loading" | "ready" | "analyzing" | "loaded" | "failed";
 
@@ -28,10 +30,11 @@ function Logo() {
   );
 }
 
-export function TopBar({ caseId, cases, phase, provenance, onAnalyze, onHow }: {
-  caseId: string; cases: CaseSummary[]; phase: Phase; provenance: string; onAnalyze: () => void; onHow: () => void;
+export function TopBar({ caseId, cases, phase, origin, provenance, onAnalyze, onHow, onCaseReady }: {
+  caseId: string; cases: CaseSummary[]; phase: Phase; origin: Origin; provenance: string; onAnalyze: () => void; onHow: () => void;
+  onCaseReady: () => void;
 }) {
-  const ids = cases.length ? cases.map((c) => c.case) : [caseId];
+  const uploaded = origin === "upload";
   return (
     <header className="flex h-14 shrink-0 items-center gap-4 border-b border-hairline bg-canvas/70 px-4 backdrop-blur-md sm:gap-6 sm:px-6">
       <Link href="/" className="flex shrink-0 items-center gap-2.5">
@@ -39,27 +42,23 @@ export function TopBar({ caseId, cases, phase, provenance, onAnalyze, onHow }: {
         <span className="font-serif text-[21px] font-semibold tracking-tight text-ink">EvidenceLens</span>
       </Link>
 
-      <nav className="flex h-full min-w-0 items-stretch gap-5 overflow-x-auto border-l border-hairline pl-4 sm:pl-6" aria-label="Matters">
-        {ids.map((id) => {
-          const active = id === caseId;
-          return (
-            <Link key={id} href={`/cases/${id}`} aria-current={active ? "page" : undefined}
-              className={`flex items-center whitespace-nowrap border-b-2 text-sm transition-colors ${active ? "border-brass font-medium text-ink" : "border-transparent text-muted hover:text-ink"}`}>
-              {caseMeta(id).title}
-            </Link>
-          );
-        })}
-      </nav>
+      <CaseTabs caseId={caseId} cases={cases} />
 
       <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
         <span className="hidden text-xs text-muted xl:inline" aria-live="polite">{provenance}</span>
         <button onClick={onHow} aria-label="How it works" className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 text-sm text-ink-2 transition-colors hover:bg-sunken">
           <HelpIcon className="h-4 w-4" /> <span className="hidden lg:inline">How it works</span>
         </button>
-        <button onClick={onAnalyze} disabled={phase === "analyzing" || phase === "loading"}
-          className="inline-flex h-9 items-center whitespace-nowrap rounded-md bg-brand px-4 text-sm font-medium text-white shadow-sm transition hover:bg-brand-hi disabled:cursor-wait disabled:opacity-60">
-          {phase === "analyzing" ? "Analyzing…" : phase === "loaded" ? "Re-run analysis" : "Analyze case"}
-        </button>
+        <QueueMenu onComplete={onCaseReady} />
+        <Link href="/new" className="inline-flex h-9 items-center whitespace-nowrap rounded-md border border-hairline px-3 text-sm text-ink-2 transition-colors hover:bg-sunken">
+          New case
+        </Link>
+        {!uploaded && (
+          <button onClick={onAnalyze} disabled={phase === "analyzing" || phase === "loading"}
+            className="inline-flex h-9 items-center whitespace-nowrap rounded-md bg-brand px-4 text-sm font-medium text-white shadow-sm transition hover:bg-brand-hi disabled:cursor-wait disabled:opacity-60">
+            {phase === "analyzing" ? "Analyzing…" : phase === "loaded" ? "Re-run analysis" : "Analyze case"}
+          </button>
+        )}
       </div>
     </header>
   );
