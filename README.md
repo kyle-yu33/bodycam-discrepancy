@@ -56,7 +56,8 @@ Tests (from the repo root): `python -m unittest backend/tests/test_pipeline.py -
 
 ## Rules
 - `schema.py` and `shared/types.ts` change together, via PR only (while the Python backend exists).
-- Clips are not committed; shared drive -> `data/clips/`.
+- Clips are not committed; `python -m app.fetch_clips` (from `backend/`) downloads them into
+  `data/clips/`. See [`docs/CLIPS.md`](docs/CLIPS.md) to add one.
 - Footage must be publicly released by an official source, non-graphic, and cited. Reports are
   team-written and labelled as such. No non-public case material (`context/safety.md`).
 - Never commit API keys; `.env` / `.env.local` stay local.
