@@ -11,8 +11,4 @@ data/clips/*
 data/cache/*
 !data/clips/.gitkeep
 !data/cache/.gitkeep
-.DS_Store
-
-data/analyses/
 data/hf/
-*.tsbuildinfo

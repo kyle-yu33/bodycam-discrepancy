@@ -1,40 +1,44 @@
-"""FFmpeg preprocessing preserves the full recording and its audio."""
+"""ffmpeg helpers: anything touching containers, codecs, audio, or precise seeking."""
 import json
-import math
 import subprocess
 from pathlib import Path
-from .schema import Clip
 
-ENCODE = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p", "-c:a", "aac", "-movflags", "+faststart"]
+H264 = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p"]
 
-def run(args):
-    p = subprocess.run(args, capture_output=True, text=True)
-    if p.returncode:
-        raise RuntimeError(f"{args[0]} failed: {p.stderr[-1500:]}")
-    return p.stdout
 
-def duration(path: Path) -> float:
-    info = json.loads(run(["ffprobe", "-v", "error", "-show_entries", "format=duration:stream=codec_type", "-of", "json", str(path)]))
-    value = float(info["format"]["duration"])
-    if not math.isfinite(value) or value <= 0 or not any(s["codec_type"] == "video" for s in info["streams"]):
-        raise ValueError("A playable video with positive duration is required")
-    return value
+def _run(cmd: list[str]) -> None:
+    p = subprocess.run(cmd, capture_output=True, text=True)
+    if p.returncode != 0:
+        raise RuntimeError(f"{cmd[0]} failed:\n{p.stderr[-2000:]}")
 
-def normalize(src: Path, dst: Path):
-    run(["ffmpeg", "-y", "-i", str(src), "-map", "0:v:0", "-map", "0:a:0?", "-vf", "scale=-2:'min(720,ih)'", *ENCODE, str(dst)])
 
-def cut(src: Path, dst: Path, start: float, end: float):
-    run(["ffmpeg", "-y", "-ss", str(start), "-i", str(src), "-t", str(end-start), "-map", "0:v:0", "-map", "0:a:0?", *ENCODE, str(dst)])
+def normalize(src: Path, dst: Path, max_seconds: int = 90, height: int = 720) -> None:
+    """Trim to max_seconds, downscale to at most `height` (never upscale), re-encode
+    to browser-safe H.264/AAC MP4."""
+    _run(["ffmpeg", "-y", "-i", str(src), "-t", str(max_seconds),
+          "-vf", f"scale=-2:'min({height},ih)'", *H264,
+          "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", str(dst)])
 
-def windows(duration_sec: float, size: float = 30, overlap: float = 10) -> list[Clip]:
-    if duration_sec <= 0 or not 0 <= overlap < size:
-        raise ValueError("Invalid duration or overlap")
-    clips = []
-    start = 0.0
-    while start < duration_sec:
-        end = min(start + size, duration_sec)
-        clips.append(Clip(index=len(clips), start_sec=start, end_sec=end))
-        if end >= duration_sec:
-            break
-        start += size - overlap
-    return clips
+
+def mux_annotated(annotated_raw: Path, original: Path, dst: Path) -> None:
+    """OpenCV writes mp4v (not browser-playable, no audio). Re-encode to H.264
+    and copy the original audio track in, so Gemini still hears the audio."""
+    _run(["ffmpeg", "-y", "-i", str(annotated_raw), "-i", str(original),
+          "-map", "0:v", "-map", "1:a?", *H264, "-c:a", "aac",
+          "-shortest", "-movflags", "+faststart", str(dst)])
+
+
+def extract_frame(video: Path, t: float, dst: Path) -> None:
+    _run(["ffmpeg", "-y", "-ss", f"{max(t, 0):.2f}", "-i", str(video),
+          "-frames:v", "1", "-q:v", "2", str(dst)])
+
+
+def cut_window(video: Path, start: float, dur: float, dst: Path) -> None:
+    _run(["ffmpeg", "-y", "-ss", f"{max(start, 0):.2f}", "-i", str(video),
+          "-t", f"{dur:.2f}", *H264, "-c:a", "aac", str(dst)])
+
+
+def duration(video: Path) -> float:
+    p = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration",
+                        "-of", "json", str(video)], capture_output=True, text=True, check=True)
+    return float(json.loads(p.stdout)["format"]["duration"])

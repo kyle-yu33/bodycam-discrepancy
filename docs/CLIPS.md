@@ -26,7 +26,7 @@ skipped; delete the file to re-download it.
 
 ## Add a YouTube clip
 
-1. Find the start and end times. Keep it **90 s or shorter**: the demo is one narrow case, and Vertex AI takes video inline only (15 MB cap per request).
+1. Find the start and end times. Keep it **90 s or shorter**: the pipeline trims anything longer.
 2. Pick a short case name, e.g. `sfst3`. The same name is used for the clip, the report
    and the ground truth.
 3. Add one line to `CLIPS` in `backend/app/fetch_clips.py`:
