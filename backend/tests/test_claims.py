@@ -12,6 +12,7 @@ os.environ["DATA_DIR"] = tempfile.mkdtemp()  # before importing cases, which rea
 
 from backend.app import cases, evaluate, pose
 from backend.app.ledger import CaseResult, Claim, ClaimCheck, ClaimResult, PoseEvent, SecondLook
+from backend.app.transcribe import Transcript
 
 
 def body(arm_deg=10.0, hand_at_nose=None):
@@ -127,6 +128,28 @@ class EvaluateTests(unittest.TestCase):
                          {"text": "He walked", "expected": "consistent"}]}
         s = evaluate.score(res, gt)
         self.assertEqual((s["caught"], s["planted"], len(s["false_flags"])), (1, 1, 1))
+
+
+class TranscriptTests(unittest.TestCase):
+    def setUp(self):
+        self.out = Path(tempfile.mkdtemp())
+
+    def test_written_once_then_cached(self):
+        with patch.dict(os.environ, {"ELEVENLABS_API_KEY": "k"}), \
+             patch("backend.app.cases.transcribe", return_value=Transcript(language_code="en", text="", segments=[])) as t:
+            cases._transcript(Path("clip.mp4"), self.out, lambda _: None)
+            cases._transcript(Path("clip.mp4"), self.out, lambda _: None)
+        self.assertEqual(t.call_count, 1)
+        self.assertTrue((self.out / "transcript.json").exists())
+
+    def test_missing_key_or_api_error_does_not_raise(self):
+        with patch.dict(os.environ, {"ELEVENLABS_API_KEY": ""}), patch("backend.app.cases.transcribe") as t:
+            cases._transcript(Path("clip.mp4"), self.out, lambda _: None)
+        t.assert_not_called()
+        with patch.dict(os.environ, {"ELEVENLABS_API_KEY": "k"}), \
+             patch("backend.app.cases.transcribe", side_effect=RuntimeError("down")):
+            cases._transcript(Path("clip.mp4"), self.out, lambda _: None)
+        self.assertFalse((self.out / "transcript.json").exists())
 
 
 if __name__ == "__main__":

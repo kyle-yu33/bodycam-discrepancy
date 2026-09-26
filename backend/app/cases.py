@@ -5,9 +5,10 @@ tuning runs only repeat the Gemini checks; each run is also archived in runs/.
 
 CLI (from backend/):
   python -m app.cases sfst2                  # uses data/clips/sfst2.mp4 + data/reports/sfst2.txt
-  python -m app.cases sfst2 --repose         # redo normalize + pose
+  python -m app.cases sfst2 --repose         # redo normalize + pose (+ transcript)
   python -m app.cases sfst2 --reextract      # redo claim extraction
-Env: CLAIMS_MODEL, CHECK_FPS, SECOND_LOOK_FPS, GEMINI_VIDEO=annotated|clean, POSE_MODEL, POSE_FPS.
+Env: CLAIMS_MODEL, CHECK_FPS, SECOND_LOOK_FPS, GEMINI_VIDEO=annotated|clean, POSE_MODEL, POSE_FPS,
+ELEVENLABS_API_KEY (optional: writes transcript.json with word timestamps; skipped without it).
 Scores against data/ground_truth/<case>.json when it exists (see app.evaluate).
 """
 import json
@@ -23,6 +24,7 @@ from . import claims as ck  # noqa: E402
 from . import pose, video  # noqa: E402
 from .gemini import Gemini  # noqa: E402
 from .ledger import CaseResult, Claim, ClaimCheck, ClaimResult, PoseEvent
+from .transcribe import transcribe
 
 DATA = Path(os.getenv("DATA_DIR", Path(__file__).resolve().parents[2] / "data"))
 CASES = DATA / "cases"
@@ -51,6 +53,23 @@ def prepare(case: str, src: Path, repose: bool = False) -> tuple[Path, float, li
             stale.unlink()
     events = [PoseEvent(**e) for e in json.loads(pose_json.read_text(encoding="utf-8"))]
     return clip, video.duration(clip), events
+
+
+def _transcript(clip: Path, out: Path, log) -> None:
+    """Timed ElevenLabs transcript saved beside the case; not used by the claim checks yet."""
+    path = out / "transcript.json"
+    if path.exists():
+        return
+    if not os.getenv("ELEVENLABS_API_KEY"):
+        log("  transcript skipped: ELEVENLABS_API_KEY not set")
+        return
+    try:
+        t = transcribe(clip)
+    except Exception as e:  # never block the claim ledger on the transcript
+        log(f"  transcript failed: {e}")
+        return
+    path.write_text(t.model_dump_json(indent=2), encoding="utf-8")
+    log(f"  transcript: {len(t.segments)} lines -> {path.name}")
 
 
 def _claims(g: Gemini, out: Path, report_text: str, reextract: bool) -> list[Claim]:
@@ -117,6 +136,9 @@ def run(case: str, src: Path, report_text: str, repose: bool = False, reextract:
     out = CASES / case
     log(f"[{case}] preparing clip and pose")
     clip, dur, events = prepare(case, src, repose)
+    if repose:
+        (out / "transcript.json").unlink(missing_ok=True)
+    _transcript(clip, out, log)
     overlay = os.getenv("GEMINI_VIDEO", "annotated") == "annotated"
     model_video = out / f"model_{'annotated' if overlay else 'clean'}.mp4"
     if not model_video.exists():
