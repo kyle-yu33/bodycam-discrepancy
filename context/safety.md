@@ -24,15 +24,16 @@ EvidenceLens is a review aid. It may help a human locate and inspect evidence; i
 
 ## Data policy for the hackathon
 
-- Use only staged, fictional, consented, non-graphic footage.
-- Use fictional names, report text, and incident details.
-- Do not ingest police footage, case material, personal data, or sensitive recordings.
-- Do not use recognizable victims, real officers, or real incidents.
-- Label the demo case clearly as fictional.
+- Use only real bodycam footage that an official source (police department, court, or oversight body) has already released publicly.
+- Choose non-graphic clips: no serious injury, death, or sexual content.
+- Cite the footage source in the app and README.
+- Write the incident report as a team; do not present it as the real officers' report, and do not name real officers or civilians in it.
+- Do not ingest non-public case material, sealed evidence, or personal data beyond what the public release already shows.
+- Label the report clearly as team-written for the demo.
 
 ## Gemini-specific privacy constraint
 
-The Gemini Files API is useful for demo video input, but Google’s public documentation states uploaded files are retained for a limited period (currently 48 hours). This is another reason the hackathon demo must use fictional footage. Delete uploads when practical.
+The Gemini Files API is useful for demo video input, but Google’s public documentation states uploaded files are retained for a limited period (currently 48 hours). This is another reason the hackathon demo must use only already-public footage. Delete uploads when practical.
 
 ## Copy review checklist
 
@@ -42,7 +43,7 @@ Before a demo, README, slide, or submission is finalized:
 - [ ] Does it say `available footage`, not simply `the footage`?
 - [ ] Does it distinguish insufficient evidence from evidence of absence?
 - [ ] Does it show evidence timestamps/frames?
-- [ ] Does it state the demo is fictional?
+- [ ] Does it cite the footage source and say the report is team-written?
 - [ ] Does it explain that a qualified human makes legal decisions?
 
 ## Best answer to “What if the model is wrong?”

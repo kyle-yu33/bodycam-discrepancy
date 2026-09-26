@@ -12,7 +12,7 @@ The product serves their workflow; it does not replace their judgment.
 
 ## Core workflow
 
-1. A user opens a fictional report and bodycam-style video.
+1. A user opens an incident report and bodycam video.
 2. The report becomes a list of atomic claims.
 3. Claims are classified as visual, audio, documentary, or subjective/legal.
 4. Only appropriate visual claims receive visual-evidence review.

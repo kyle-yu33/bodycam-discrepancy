@@ -7,7 +7,7 @@ evidence map, helping defence-side legal teams find the moments that deserve clo
 
 > **No claim without a source. No source without a timestamp. No certainty when footage is unclear.**
 
-This is a fictional hackathon prototype. It surfaces source-linked review questions; it does not
+This is a hackathon prototype using publicly released bodycam footage and a team-written report. It surfaces source-linked review questions; it does not
 make legal conclusions. Human review is always required.
 
 ## Project context
@@ -59,7 +59,7 @@ ffmpeg evidence frames -> cached JSON -> Next.js review UI.
 ## Rules
 - `schema.py` and `shared/types.ts` change together, via PR only (while the Python backend exists).
 - Clips are not committed; shared drive -> `data/clips/`.
-- All footage and reports are staged, fictional, consented, and labelled as such. No real
-  police footage, case material, or personal data (`context/safety.md`).
+- Footage must be publicly released by an official source, non-graphic, and cited. Reports are
+  team-written and labelled as such. No non-public case material (`context/safety.md`).
 - Never commit API keys; `.env` / `.env.local` stay local.
 - UI and pitch copy never say lie, false, verdict, guilt, risk score, or contradiction proven.

@@ -32,7 +32,7 @@ Incorrect wording:
 | Source | Build-relevant finding |
 |---|---|
 | [Gemini video understanding](https://ai.google.dev/gemini-api/docs/video-understanding) | Gemini accepts video input; default static processing extracts frames at 1 FPS; the docs warn this can miss rapid motion/quick changes; Files API is recommended for larger/reusable video inputs; prompts can request visual/audio details and timestamps. |
-| [Gemini Files API](https://ai.google.dev/gemini-api/docs/files) | Files may be stored for up to 48 hours; uploaded files can be manually deleted; use only fictional/consented demo media. |
+| [Gemini Files API](https://ai.google.dev/gemini-api/docs/files) | Files may be stored for up to 48 hours; uploaded files can be manually deleted; upload only already-public demo media. |
 | [Gemini structured outputs](https://ai.google.dev/gemini-api/docs/structured-output) | Gemini supports JSON Schema/structured output; documentation warns teams to handle schema-compliant but semantically incorrect outputs. |
 | [Gemini rate limits](https://ai.google.dev/gemini-api/docs/rate-limits) | Limits are measured across RPM, TPM, and RPD; test the actual team project before relying on live calls. |
 
@@ -49,4 +49,4 @@ Incorrect wording:
 1. The user pain is real and validated by existing legal-tech products.
 2. Existing tools weaken broad novelty claims but do not eliminate the potential claim-ledger/visual-review wedge.
 3. Current model output should be treated as a source-linked review aid, never an autonomous legal conclusion.
-4. This hackathon prototype must use synthetic/fictitious data and present calibrated uncertainty honestly.
+4. This hackathon prototype must use only publicly released footage and present calibrated uncertainty honestly.

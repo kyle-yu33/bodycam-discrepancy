@@ -34,7 +34,7 @@ Each ledger item contains:
 | A way to prioritize lawyer attention | A system that decides guilt or legal liability |
 | A claim-first, evidence-linked workflow | A generic surveillance event detector |
 | A visual-review layer for concrete physical claims | A credibility, intent, or misconduct classifier |
-| A fictional hackathon prototype | A production-ready legal platform |
+| A hackathon prototype | A production-ready legal platform |
 
 ## Evidence states
 
@@ -61,8 +61,8 @@ Public JusticeText materials emphasize transcription, transcript search, documen
 
 Build one polished end-to-end case only:
 
-- one staged, fictional, non-graphic 45–90 second bodycam-style video;
-- one fictional report with 5–7 claims;
+- one real, publicly released, non-graphic 45–90 second bodycam clip (source cited);
+- one realistic team-written report with 5–7 claims;
 - one claim consistent with visible evidence;
 - one claim that merits close human review;
 - one claim with insufficient visual evidence;
@@ -73,7 +73,7 @@ Build one polished end-to-end case only:
 ## Architecture decision
 
 ```text
-Report + staged video
+Report + bodycam clip
   → claim extraction / eligibility
   → Gemini Pass 1: claim-guided evidence localization
   → short evidence window

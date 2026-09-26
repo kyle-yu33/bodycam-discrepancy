@@ -36,7 +36,7 @@ Adapt to the existing repository instead of forcing this exact layout.
 
 ### 1. Seed the domain model
 
-Create one fictional case with report text, 5–7 claims, evidence windows, source-frame times, and all approved status categories.
+Create one demo case (public clip + team-written report) with report text, 5–7 claims, evidence windows, source-frame times, and all approved status categories.
 
 ### 2. Build the static three-panel review page
 
@@ -62,7 +62,7 @@ Run the repository’s available lint, typecheck, test, and production-build com
 
 A judge can:
 
-1. open the fictional case;
+1. open the demo case;
 2. click a report claim;
 3. see the video seek/highlight the relevant window;
 4. inspect the evidence ledger;

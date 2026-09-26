@@ -6,9 +6,9 @@ Demonstrate one dependable evidence-first review flow. A polished happy path and
 
 ## The case
 
-Use one **staged, fully fictional, non-graphic, consented bodycam-style video** that lasts approximately 45–90 seconds.
+Use one **real, publicly released, non-graphic bodycam clip** of approximately 45–90 seconds, excerpted from footage an official source (police department, court, or oversight body) has already made public. Cite the source.
 
-Pair it with one fictional incident report containing 5–7 report claims.
+Pair it with one realistic incident report the team writes for that clip, containing 5–7 report claims. Because the team writes the report, the expected result for each claim is known in advance.
 
 ### Required claim mix
 
@@ -20,18 +20,18 @@ Pair it with one fictional incident report containing 5–7 report claims.
 | Audio-only claim | Clearly identified as not a visual judgment |
 | Subjective/legal/intent claim | Outside automated assessment |
 
-Design the staged video so the key visual action is well lit, framed, and visible for roughly 2–4 seconds. Do not depend on a split-second gesture, tiny distant object, rapid camera motion, or a complex altercation.
+Choose a clip where the key visual action is well lit, framed, and visible for roughly 2–4 seconds. Do not depend on a split-second gesture, tiny distant object, rapid camera motion, or a complex altercation.
 
 ## In scope
 
-- fictional report viewer;
+- team-written report viewer;
 - claim list with categories and statuses;
 - video player that seeks to claim timestamps;
 - source-frame thumbnails/placeholders;
 - selected claim evidence ledger;
 - `Analyze case` loading flow with deterministic demo result;
 - explicit mock/cached-analysis label if results are not live;
-- visible human-review and fictional-data disclaimer.
+- visible human-review disclaimer and footage source attribution.
 
 ## Out of scope
 
@@ -51,13 +51,13 @@ Design the staged video so the key visual action is well lit, framed, and visibl
 - [ ] Selecting a claim updates the ledger and seeks/highlights the relevant video moment.
 - [ ] All four approved evidence states are visible.
 - [ ] The app makes no unsafe truth, lie, guilt, intent, or liability claim.
-- [ ] The staged case is visibly labeled fictional.
+- [ ] The footage source is cited and the report is visibly labeled as team-written for the demo.
 - [ ] A fallback works if Gemini, Wi-Fi, or upload processing fails.
 
 ## Demo fallback
 
-The primary demo may use precomputed/cached results for the known fictional case. That is acceptable only if labeled honestly, for example:
+The primary demo may use precomputed/cached results for the known demo case. That is acceptable only if labeled honestly, for example:
 
-> “Demo analysis loaded for this fictional case.”
+> “Demo analysis loaded for this case.”
 
 A live re-analysis button may exist, but it must never be the only path to the judge moment.

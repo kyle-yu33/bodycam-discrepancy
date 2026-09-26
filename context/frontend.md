@@ -9,14 +9,14 @@ Build a calm, evidence-review workspace. The page should feel like a legal revie
 ### Header
 
 - `EvidenceLens` name/logo;
-- badge: `Fictional demo case`;
+- badge: `Demo case: public footage, team-written report`;
 - trust label: `Human review required`;
 - `Analyze case` button;
 - analysis state: `Ready`, `Analyzing`, `Demo result loaded`, or `Analysis failed`.
 
 ### Left panel — Report Claims
 
-- compact fictional report narrative;
+- compact report narrative;
 - 5–7 atomic claim cards;
 - claim number and exact wording;
 - category: Visual / Audio / Documentary / Outside automated assessment;
@@ -75,6 +75,6 @@ Show the selected claim with:
 
 Use:
 
-> “This fictional prototype surfaces source-linked review questions. It does not make legal conclusions.”
+> “This prototype surfaces source-linked review questions. It does not make legal conclusions.”
 
 Never show `lie`, `false`, `verdict`, `guilt`, `risk score`, or `contradiction proven`.

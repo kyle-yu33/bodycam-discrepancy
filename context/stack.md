@@ -23,7 +23,7 @@ This is a hackathon architecture, not a production deployment design.
 | Video input | Gemini Files API | Officially recommended for larger/reusable video files; upload once, reference across analysis calls. |
 | Output shape | Structured JSON + Zod | Keeps the evidence ledger predictable; JSON validity does not prove factual accuracy. |
 | Clip prep | FFmpeg | Preserves timestamps and creates short second-pass clips only when needed. |
-| Persistence | Local TypeScript/JSON seed data | One staged demo case does not justify a database. |
+| Persistence | Local TypeScript/JSON seed data | One demo case does not justify a database. |
 | Player | Native HTML `<video>` | Reliable playback and timestamp seeking. |
 
 ## Two-pass model flow
@@ -38,9 +38,9 @@ Pass 2 is not independent verification. It is a narrower grounding task using th
 
 ## Gemini research constraints
 
-Official Gemini video documentation states that default static processing samples video at **1 FPS** and may miss rapid motion or quick scene changes. This is why the MVP uses a short staged video and slow, visible key actions.
+Official Gemini video documentation states that default static processing samples video at **1 FPS** and may miss rapid motion or quick scene changes. This is why the MVP uses a short clip chosen for slow, visible key actions.
 
-The Files API is convenient for a demo but official documentation states uploaded files are stored for up to **48 hours**. Use fictional, consented footage only and delete uploaded demo files when practical.
+The Files API is convenient for a demo but official documentation states uploaded files are stored for up to **48 hours**. Upload only already-public footage and delete uploaded demo files when practical.
 
 ## Do not build now
 

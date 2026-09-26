@@ -74,7 +74,7 @@ Expected demo response:
 ```json
 {
   "mode": "mock",
-  "caseId": "fictional-demo-001",
+  "caseId": "demo-001",
   "claims": [],
   "reviews": [],
   "analyzedAt": "ISO timestamp"
@@ -87,7 +87,7 @@ The UI must visibly distinguish `mock`/cached output from live model output.
 
 ### Pass 1 — claim-guided localization
 
-Input: one visually assessable report claim plus the short full staged video.
+Input: one visually assessable report claim plus the short full bodycam clip.
 
 Output: candidate time window plus a short reason, or `unable_to_locate`.
 
@@ -116,5 +116,5 @@ Pass 2 must never output a legal conclusion, a credibility judgment, or a claim 
 - Gemini API key stays server-side only.
 - Use `.env.local`, never commit it.
 - Include `.env.example` with variable names only.
-- Do not accept or upload real evidence in the MVP.
-- Use synthetic footage because Gemini Files API uploads are retained for a limited period according to Google documentation.
+- Do not accept or upload non-public case evidence in the MVP.
+- Only upload footage that is already publicly released; Gemini Files API uploads are retained for a limited period according to Google documentation.

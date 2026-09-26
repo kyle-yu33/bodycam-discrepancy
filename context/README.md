@@ -16,7 +16,7 @@ This folder is the team’s concise source of truth for the Hack the Hill projec
 | [main.md](main.md) | One-page authoritative project context |
 | [product.md](product.md) | User, workflow, claim-evidence ledger, and product language |
 | [positioning.md](positioning.md) | JusticeText/competitor research and defensible differentiation |
-| [mvp.md](mvp.md) | Demo scope, fictional case design, acceptance criteria, fallback |
+| [mvp.md](mvp.md) | Demo scope, demo case design, acceptance criteria, fallback |
 | [stack.md](stack.md) | MVP architecture, dependencies, and deliberate non-goals |
 | [backend.md](backend.md) | Domain types, analysis pipeline, API/service boundaries |
 | [frontend.md](frontend.md) | Review UI, interaction requirements, and visual system |
