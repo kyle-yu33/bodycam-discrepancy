@@ -132,12 +132,17 @@ def _finish(g: Gemini, case: str, clip: Path, dur: float, claim: Claim, chk: Cla
     return r
 
 
-def run(case: str, src: Path, report_text: str, repose: bool = False, reextract: bool = False, log=print) -> CaseResult:
+def run(case: str, src: Path, report_text: str, repose: bool = False, reextract: bool = False, log=print,
+        progress=None, origin: str = "demo") -> CaseResult:
+    """progress(stage, fraction) is called as each step starts; the upload API shows it to the user."""
+    step = progress or (lambda stage, fraction: None)
     out = CASES / case
     log(f"[{case}] preparing clip and pose")
+    step("Preparing footage and tracking body pose", 0.05)
     clip, dur, events = prepare(case, src, repose)
     if repose:
         (out / "transcript.json").unlink(missing_ok=True)
+    step("Transcribing audio", 0.4)
     _transcript(clip, out, log)
     overlay = os.getenv("GEMINI_VIDEO", "annotated") == "annotated"
     model_video = out / f"model_{'annotated' if overlay else 'clean'}.mp4"
@@ -146,15 +151,20 @@ def run(case: str, src: Path, report_text: str, repose: bool = False, reextract:
 
     g = Gemini()
     try:
+        step("Splitting the report into claims", 0.5)
         claims = _claims(g, out, report_text, reextract)
         log(f"[{case}] {len(claims)} claims; checking with {ck.CLAIMS_MODEL} at {ck.CHECK_FPS} fps "
             f"({'pose overlay' if overlay else 'clean video'})")
+        step("Checking each claim against the footage", 0.6)
         checks = {c.claim_id: c for c in ck.check(g, model_video, claims, pose.summarize(events), dur, overlay)}
-        results = [_finish(g, case, clip, dur, c, checks.get(c.id), events, log) for c in claims]
+        results = []
+        for i, c in enumerate(claims):
+            step("Re-checking flags and building the ledger", 0.8 + 0.2 * i / max(len(claims), 1))
+            results.append(_finish(g, case, clip, dur, c, checks.get(c.id), events, log))
     finally:
         g.close()
 
-    res = CaseResult(case=case, model=ck.CLAIMS_MODEL, created_at=datetime.now(timezone.utc).isoformat(),
+    res = CaseResult(case=case, origin=origin, model=ck.CLAIMS_MODEL, created_at=datetime.now(timezone.utc).isoformat(),
                      report_text=report_text, duration_sec=dur, video_url=_media(case, "clip.mp4"),
                      annotated_video_url=_media(case, "annotated.mp4"), results=results, pose_events=events)
     (out / "result.json").write_text(res.model_dump_json(indent=2), encoding="utf-8")

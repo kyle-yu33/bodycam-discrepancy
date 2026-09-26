@@ -57,6 +57,7 @@ class ClaimResult(BaseModel):
 
 class CaseResult(BaseModel):
     case: str
+    origin: Literal["demo", "upload"] = "demo"   # upload = analyzed from the frontend via POST /cases
     model: str
     created_at: str
     report_text: str
