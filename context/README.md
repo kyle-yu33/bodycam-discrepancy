@@ -4,6 +4,7 @@ This folder is the team’s concise source of truth for the Hack the Hill projec
 
 ## Start here
 
+- **[../docs/ALIGNMENT.md](../docs/ALIGNMENT.md)** — current build status, setup, API contract, owners and team rules.
 - **[main.md](main.md)** — canonical project brief: problem, solution, differentiation, scope, and current decisions.
 - **[mvp.md](mvp.md)** — exactly what must be built for the hackathon demo.
 - **[stack.md](stack.md)** — recommended technical stack and why it is deliberately small.

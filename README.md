@@ -15,7 +15,7 @@ make legal conclusions. Human review is always required.
 The team's source of truth lives in [`context/`](context/README.md). Read
 [`context/main.md`](context/main.md) before changing scope, and `mvp.md`, `stack.md`, and
 `skeleton.md` before building. `safety.md` and `positioning.md` are guardrails for all UI copy
-and pitch claims. The build plan, workflow and status are in [`docs/PLAN.md`](docs/PLAN.md).
+and pitch claims. **Team alignment (status, setup, API contract, owners, rules): [`docs/ALIGNMENT.md`](docs/ALIGNMENT.md).**
 
 ## Claims pipeline (claim-evidence ledger)
 
@@ -26,7 +26,7 @@ From `backend/`, with `GOOGLE_API_KEY` in `backend/.env`:
     python -m app.evaluate sfst2        # re-score the latest result against data/ground_truth/sfst2.json
 
 The API serves results at `GET /cases` and `GET /cases/{case}`, media under `/case-media/`.
-Details and tuning knobs: [`docs/PLAN.md`](docs/PLAN.md).
+Details, tuning knobs and the API contract: [`docs/ALIGNMENT.md`](docs/ALIGNMENT.md).
 
 ## Current state of the repo
 
