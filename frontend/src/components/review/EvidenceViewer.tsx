@@ -9,11 +9,11 @@ const LANE_H = 8;
 const LANE_GAP = 4;
 
 export function EvidenceViewer({ results, duration, selected, revealed, overlay, setOverlay, videoRef, src, poster, time,
-  onSeek, onSelect, onTimeUpdate, onLoadedMetadata, source, sourceUrl }: {
+  onSeek, onSelect, onTimeUpdate, onLoadedMetadata, source, sourceUrl, uploaded }: {
   results: ClaimResult[]; duration: number; selected: ClaimResult | null; revealed: boolean;
   overlay: boolean; setOverlay: (v: boolean) => void; videoRef: RefObject<HTMLVideoElement | null>; src?: string; poster?: string;
   time: number; onSeek: (t: number) => void; onSelect: (id: string) => void;
-  onTimeUpdate: () => void; onLoadedMetadata: () => void; source: string; sourceUrl: string;
+  onTimeUpdate: () => void; onLoadedMetadata: () => void; source: string; sourceUrl: string; uploaded: boolean;
 }) {
   const lanes = useMemo(() => laneOf(results), [results]);
   const laneCount = Math.max(1, ...[...lanes.values()].map((l) => l + 1));
@@ -110,8 +110,12 @@ export function EvidenceViewer({ results, duration, selected, revealed, overlay,
           </p>
         )}
         <p className="mt-3 text-[11px] leading-5 text-muted">
-          Source: {sourceUrl ? <a href={sourceUrl} target="_blank" rel="noreferrer" className="underline">{source}</a> : source}.
-          Report: fictional, written by our team. Timestamps are approximate; watch around each window.
+          {uploaded ? "Footage and report: uploaded for this case." : (
+            <>
+              Source: {sourceUrl ? <a href={sourceUrl} target="_blank" rel="noreferrer" className="underline">{source}</a> : source}.
+              Report: fictional, written by our team.
+            </>
+          )} Timestamps are approximate; watch around each window.
         </p>
       </div>
     </section>

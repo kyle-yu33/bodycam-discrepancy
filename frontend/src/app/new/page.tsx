@@ -125,7 +125,11 @@ export default function NewCase() {
         {running || job?.status === "complete" ? (
           <section className="el-fade-up mt-6 rounded-xl border border-line bg-card p-5" aria-live="polite">
             <h2 className="text-base font-semibold">Analyzing {job.filename}</h2>
-            <p className="mt-1 text-sm text-muted">{job.status === "complete" ? "Done. Opening the review…" : job.stage}</p>
+            <p className="mt-1 text-sm text-muted">
+              {job.status === "complete" ? "Done. Opening the review…"
+                : job.status === "queued" ? "Waiting for another analysis to finish. Cases run one at a time."
+                : job.stage}
+            </p>
             <div className="mt-4 h-2 overflow-hidden rounded-full bg-paper">
               <div className="h-full rounded-full bg-brand transition-all duration-700" style={{ width: `${Math.round(job.progress * 100)}%` }} />
             </div>

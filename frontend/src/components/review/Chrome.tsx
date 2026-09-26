@@ -45,7 +45,7 @@ export function Header({ caseId, cases, phase, origin, onAnalyze, onHow }: {
         <span className="text-lg font-semibold tracking-tight">EvidenceLens</span>
       </Link>
 
-      <nav className="flex gap-1 rounded-lg bg-paper p-1" aria-label="Demo cases">
+      <nav className="flex gap-1 rounded-lg bg-paper p-1" aria-label="Cases">
         {(cases.length ? cases.map((c) => c.case) : [caseId]).map((id) => (
           <Link key={id} href={`/cases/${id}`} aria-current={id === caseId ? "page" : undefined}
             className={`rounded-md px-3 py-1.5 text-sm transition ${id === caseId ? "bg-card font-medium shadow-sm" : "text-muted hover:text-ink"}`}>
@@ -61,7 +61,7 @@ export function Header({ caseId, cases, phase, origin, onAnalyze, onHow }: {
         <span className="rounded-full bg-ink px-2.5 py-1 font-medium text-white">Human review required</span>
         <span className="flex items-center gap-1.5 px-1 text-muted" aria-live="polite">
           <span className={`h-2 w-2 rounded-full ${phase === "loaded" ? "bg-consistent" : phase === "analyzing" ? "animate-pulse bg-review" : phase === "failed" ? "bg-review" : "bg-insufficient"}`} />
-          {PHASE_LABEL[phase]}
+          {uploaded && phase === "loaded" ? "Result loaded" : PHASE_LABEL[phase]}
         </span>
         <button onClick={onHow} className="rounded-lg border border-line px-3 py-2 text-sm hover:bg-paper">How it works</button>
         <Link href="/new" className="rounded-lg border border-line px-3 py-2 text-sm hover:bg-paper">New case</Link>
