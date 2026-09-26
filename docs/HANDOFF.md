@@ -3,6 +3,11 @@
 Status as of 2026-09-26. Written so a new Claude Code session can pick up the work with
 no other context. Read this whole file before changing code.
 
+> **Update (branch `clips`):** the Hugging Face dataset and the copa184 case are dropped.
+> All clips now come from YouTube via `python -m app.fetch_clips` (see `docs/CLIPS.md`),
+> clips can be up to 90 s, and the demo is a field sobriety test (`sfst1`, `sfst2`).
+> Sections below that mention copa184, BodyCam-VQA, or 30 s clips are out of date.
+
 ---
 
 ## 1. Mission

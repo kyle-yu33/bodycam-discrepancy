@@ -11,9 +11,9 @@ ffmpeg evidence frames -> cached JSON -> Next.js review UI.
     pip install -r requirements.txt
     copy .env.example .env      # add GEMINI_API_KEY
     python -m app.fetch_clips                                           # demo clips -> data/clips/
-    python -m app.pose ..\data\clips\copa184.mp4                        # pose only
-    python -m app.pipeline ..\data\clips\copa184.mp4 ..\data\reports\copa184.txt
-    python -m app.eval <case_id> ..\data\ground_truth\copa184.json
+    python -m app.pose ..\data\clips\sfst1.mp4                          # pose only
+    python -m app.pipeline ..\data\clips\sfst1.mp4 ..\data\reports\sfst1.txt
+    python -m app.eval <case_id> ..\data\ground_truth\sfst1.json
     uvicorn app.main:app --reload --port 8000                           # http://localhost:8000/docs
 
 ## LLM backend
@@ -29,8 +29,7 @@ replays its labels; without one every claim is `not_visible`. Force a backend wi
 ## Rules
 - schema.py and shared/types.ts change together, via PR only.
 - Clips are not committed; `python -m app.fetch_clips` pulls them into data/clips/.
-  Sources: BodyCam-VQA/BWC-VideoText-359 on Hugging Face (COPA Chicago public records),
-  and YouTube sections cut with yt-dlp. To add a clip, add its URL and "start-end" to
-  `YOUTUBE` in backend/app/fetch_clips.py; the case name must match data/reports/ and
+  Each clip is a YouTube section cut with yt-dlp. To add one, add its URL and
+  "start-end" to `CLIPS` in backend/app/fetch_clips.py; the case name must match data/reports/ and
   data/ground_truth/. Clips longer than 90 s are trimmed. Details: docs/CLIPS.md.
 - Reports in data/reports/ are fictional and labelled as such.

@@ -21,22 +21,22 @@ skipped; delete the file to re-download it.
 
 | Case | Source | Section | What it shows |
 |---|---|---|---|
-| `sfst1` | [YouTube 4ThCZOa20wc](https://www.youtube.com/watch?v=4ThCZOa20wc) | 3:40–5:00 (80 s) | Walk-and-Turn field sobriety test: nine steps along a line, a slow turn, nine steps back. Main demo case. |
-| `copa184` | BodyCam-VQA `eval_videos/video184.mp4` | whole video (~60 s) | Handcuffed subject beside an SUV, officers talking. Backup case. |
+| `sfst1` | [YouTube 4ThCZOa20wc](https://www.youtube.com/watch?v=4ThCZOa20wc) | 3:40–5:00 (80 s) | Walk-and-Turn field sobriety test: nine steps along a line, a slow turn, nine steps back. |
+| `sfst2` | [YouTube mXw1nvF3klk](https://www.youtube.com/watch?v=mXw1nvF3klk) | 15:20–16:20 (60 s) | Indoor sobriety tests in a police garage: eye check, head tilted back with eyes closed (balance), finger to nose. Real Axon bodycam footage, subject's face unblurred. |
 
 ## Add a YouTube clip
 
 1. Find the start and end times. Keep it **90 s or shorter**: the pipeline trims anything longer.
-2. Pick a short case name, e.g. `sfst2`. The same name is used for the clip, the report
+2. Pick a short case name, e.g. `sfst3`. The same name is used for the clip, the report
    and the ground truth.
-3. Add one line to `YOUTUBE` in `backend/app/fetch_clips.py`:
+3. Add one line to `CLIPS` in `backend/app/fetch_clips.py`:
    ```python
-   "sfst2": ("https://www.youtube.com/watch?v=VIDEO_ID", "1:05-2:05"),
+   "sfst3": ("https://www.youtube.com/watch?v=VIDEO_ID", "1:05-2:05"),
    ```
    Times can be `m:ss`, `h:mm:ss` or plain seconds.
-4. Run `python -m app.fetch_clips sfst2` and check it:
+4. Run `python -m app.fetch_clips sfst3` and check it:
    ```powershell
-   ffprobe -v error -show_entries format=duration:stream=codec_type ..\data\clips\sfst2.mp4
+   ffprobe -v error -show_entries format=duration:stream=codec_type ..\data\clips\sfst3.mp4
    ```
    You want one `video` stream, one `audio` stream, and the duration you asked for.
 5. Write `data/reports/sfst2.txt` (fictional, labelled as such) and, after watching the

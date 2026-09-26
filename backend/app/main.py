@@ -22,7 +22,7 @@ def analyze(video: UploadFile = File(...), report_text: str = Form(...), force: 
             fixture_name: str | None = Form(None)):
     fixture = None
     if fixture_name:
-        # Name only (e.g. "copa184" or "copa184.json"); never a path from the client.
+        # Name only (e.g. "sfst1" or "sfst1.json"); never a path from the client.
         fixture = GROUND_TRUTH / Path(fixture_name).with_suffix(".json").name
         if not fixture.is_file():
             raise HTTPException(400, f"unknown fixture: {fixture.name}")
