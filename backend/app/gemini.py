@@ -1,5 +1,6 @@
 """Gemini calls. All return parsed pydantic objects via structured output."""
 import os
+import time
 from pathlib import Path
 
 from google import genai
@@ -18,12 +19,26 @@ def _c():
     return _client
 
 
+INLINE_MAX = 12_000_000  # 20 MB request cap, and inline bytes grow ~33% as base64
+
+
 def _video_part(path: Path, fps: float | None = None) -> types.Part:
-    # Inline bytes are fine under ~20 MB; a 30 s 720p clip is ~5-10 MB.
-    return types.Part(
-        inline_data=types.Blob(data=Path(path).read_bytes(), mime_type="video/mp4"),
-        video_metadata=types.VideoMetadata(fps=fps) if fps else None,
-    )
+    # Short windows go inline; full clips (up to 90 s, ~15 MB at 720p) go via the Files API.
+    meta = types.VideoMetadata(fps=fps) if fps else None
+    if Path(path).stat().st_size <= INLINE_MAX:
+        return types.Part(inline_data=types.Blob(data=Path(path).read_bytes(), mime_type="video/mp4"),
+                          video_metadata=meta)
+    f = _c().files.upload(file=path, config=types.UploadFileConfig(mime_type="video/mp4"))
+    deadline = time.monotonic() + 300
+    while f.state == types.FileState.PROCESSING:
+        if time.monotonic() > deadline:
+            raise RuntimeError(f"Gemini file processing timed out: {f.name}")
+        time.sleep(2)
+        f = _c().files.get(name=f.name)
+    if f.state != types.FileState.ACTIVE:
+        raise RuntimeError(f"Gemini file upload failed: {f.name} {f.error}")
+    return types.Part(file_data=types.FileData(file_uri=f.uri, mime_type="video/mp4"),
+                      video_metadata=meta)
 
 
 def _json(contents, schema):

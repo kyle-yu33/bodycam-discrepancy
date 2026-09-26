@@ -29,5 +29,8 @@ replays its labels; without one every claim is `not_visible`. Force a backend wi
 ## Rules
 - schema.py and shared/types.ts change together, via PR only.
 - Clips are not committed; `python -m app.fetch_clips` pulls them into data/clips/.
-  Source: BodyCam-VQA/BWC-VideoText-359 on Hugging Face (COPA Chicago public records).
+  Sources: BodyCam-VQA/BWC-VideoText-359 on Hugging Face (COPA Chicago public records),
+  and YouTube sections cut with yt-dlp. To add a clip, add its URL and "start-end" to
+  `YOUTUBE` in backend/app/fetch_clips.py; the case name must match data/reports/ and
+  data/ground_truth/. Clips longer than 90 s are trimmed. Details: docs/CLIPS.md.
 - Reports in data/reports/ are fictional and labelled as such.
