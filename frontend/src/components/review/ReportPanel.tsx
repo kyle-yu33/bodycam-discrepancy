@@ -23,8 +23,8 @@ function Tabs({ view, setView, revealed, count }: { view: ReportView; setView: (
   );
 }
 
-export function ReportPanel({ report, results, revealed, selectedId, onSelect, filter, view, setView }: {
-  report: ParsedReport; results: ClaimResult[]; revealed: boolean; selectedId: string | null;
+export function ReportPanel({ report, results, summary, revealed, selectedId, onSelect, filter, view, setView }: {
+  report: ParsedReport; results: ClaimResult[]; summary: string | null; revealed: boolean; selectedId: string | null;
   onSelect: (id: string) => void; filter: Status | null; view: ReportView; setView: (v: ReportView) => void;
 }) {
   const segments = useMemo(() => segment(report.narrative, results), [report.narrative, results]);
@@ -35,6 +35,12 @@ export function ReportPanel({ report, results, revealed, selectedId, onSelect, f
       <Tabs view={view} setView={setView} revealed={revealed} count={results.length} />
 
       <div className="min-h-0 flex-1 overflow-y-auto">
+        {revealed && (
+          <section className="border-b border-hairline bg-sunken/45 px-6 py-4" aria-label="Findings summary">
+            <h2 className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted">Findings summary</h2>
+            <p className="mt-1 text-[13px] leading-6 text-ink-2">{summary ?? "Preparing overview…"}</p>
+          </section>
+        )}
         {!showClaims ? (
           <article className="@container px-7 pb-8 pt-5">
             {report.disclaimer && (

@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CaseResult, ClaimResult, Status } from "@/lib/ledger";
-import { getCase, media } from "@/lib/ledger";
+import { getCase, getCaseSummary, media } from "@/lib/ledger";
 import { STATUS_ORDER, caseMeta, parseReport } from "@/lib/present";
 import { HowItWorks, MatterHeader, TopBar, type Phase } from "./Chrome";
 import { EvidenceViewer } from "./EvidenceViewer";
@@ -13,6 +13,7 @@ const LEAD_OUT = 0.75;
 
 export function Workspace({ caseId }: { caseId: string }) {
   const [data, setData] = useState<CaseResult | null>(null);
+  const [caseSummary, setCaseSummary] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>("loading");
   const [error, setError] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -31,6 +32,11 @@ export function Workspace({ caseId }: { caseId: string }) {
     getCase(caseId).then((d) => {
       if (!alive) return;
       setData(d); setError(""); setPhase("loaded");
+      setCaseSummary(d.summary ?? null);
+      if (!d.summary) {
+        getCaseSummary(caseId).then(({ text }) => { if (alive) setCaseSummary(text); })
+          .catch(() => { if (alive) setCaseSummary("The footage and report were compared for this case. Review the findings and their video moments before drawing a conclusion."); });
+      }
       const q = new URLSearchParams(window.location.search);
       const claim = d.results.find((r) => r.claim.id === q.get("claim"));
       if (claim) { setSelectedId(claim.claim.id); resume.current = { t: claim.window_start_sec ?? 0, play: false }; }
@@ -156,7 +162,7 @@ export function Workspace({ caseId }: { caseId: string }) {
 
       <main className={`relative z-0 grid flex-1 gap-4 px-6 pb-6 xl:min-h-0 ${expanded ? "xl:grid-cols-1" : "xl:grid-cols-[minmax(300px,1fr)_minmax(0,2fr)]"}`}>
         {!expanded && (
-          <ReportPanel report={report} results={results} revealed={revealed} selectedId={selectedId}
+          <ReportPanel report={report} results={results} summary={caseSummary} revealed={revealed} selectedId={selectedId}
             onSelect={select} filter={filter} view={view} setView={setView} />
         )}
         <div className="min-w-0 space-y-4">

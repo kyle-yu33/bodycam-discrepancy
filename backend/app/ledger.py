@@ -35,6 +35,9 @@ class SecondLook(BaseModel):
     observation: str = Field(description="What this window shows, stated neutrally")
     confirmed: bool = Field(description="True only if the window clearly shows footage incompatible with the claim")
 
+class FindingSummary(BaseModel):
+    text: str = Field(description="One general paragraph of about three to five sentences summarizing the findings")
+
 # ---------- Backend-only ----------
 
 class PoseEvent(BaseModel):
@@ -64,6 +67,7 @@ class CaseResult(BaseModel):
     model: str
     created_at: str
     report_text: str
+    summary: Optional[str] = None
     duration_sec: float
     video_url: str
     annotated_video_url: str
