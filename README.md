@@ -37,7 +37,7 @@ Uploads must be publicly released footage (`context/safety.md`).
 
 ## Claims pipeline (claim-evidence ledger)
 
-The demo cases (`sfst1`, `sfst2`) are prepared from the command line and replayed from cache.
+The demo cases (`sfst1`, `sfst2`, `gunpoint`, `porch`, `hospital`, `parkedcar`; see `docs/CLIPS.md`) are prepared from the command line and replayed from cache.
 From `backend/`, with `GOOGLE_API_KEY` in `backend/.env`:
 
     python -m app.fetch_clips           # demo clips -> data/clips/

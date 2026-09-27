@@ -11,9 +11,9 @@ from .runtime import check
 
 ENCODE = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p", "-c:a", "aac", "-movflags", "+faststart"]
 
-def run(args, on_progress=None, duration_sec=None):
+def run(args, on_progress=None, duration_sec=None, timeout_sec=None):
     check()
-    deadline = time.monotonic() + float(os.getenv("FFMPEG_TIMEOUT_SEC", "300"))
+    deadline = time.monotonic() + (float(os.getenv("FFMPEG_TIMEOUT_SEC", "300")) if timeout_sec is None else timeout_sec)
     # A progress file avoids blocking pipe reads on Windows while communicate
     # drains FFmpeg's stderr. It contains processed timestamps, not invented time.
     with tempfile.TemporaryDirectory(prefix="video-progress-") as tmp:
@@ -81,6 +81,15 @@ def cut(src: Path, dst: Path, start: float, end: float, height: int | None = Non
 def for_model(src: Path, dst: Path, height: int = 480):
     """Smaller copy for Gemini: Vertex AI takes video inline only (15 MB cap)."""
     run(["ffmpeg", "-y", "-i", str(src), "-map", "0:v:0", "-map", "0:a:0?", "-vf", f"scale=-2:'min({height},ih)'", *ENCODE, str(dst)])
+    ensure_model_size(dst)
+
+def for_model_window(src: Path, dst: Path, start: float, end: float):
+    """Encode one short window with a bitrate cap so it fits Gemini's inline limit."""
+    run(["ffmpeg", "-y", "-ss", str(start), "-i", str(src), "-t", str(end-start),
+         "-map", "0:v:0", "-map", "0:a:0?", "-vf", "scale=-2:'min(480,ih)'",
+         "-c:v", "libx264", "-preset", "veryfast", "-b:v", "900k", "-maxrate", "1100k",
+         "-bufsize", "2200k", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "64k",
+         "-movflags", "+faststart", str(dst)])
     ensure_model_size(dst)
 
 def mux_audio(silent: Path, with_audio: Path, dst: Path, on_progress=None):

@@ -13,14 +13,16 @@ os.environ.setdefault("DATA_DIR", tempfile.mkdtemp())  # before importing main, 
 from fastapi.testclient import TestClient
 
 from backend.app import main
-from backend.app.ledger import CaseResult
+from backend.app import cases as claim_cases
+from backend.app.ledger import CaseResult, Claim, ClaimCheck
 from backend.app.schema import Job
 
 REPORT = "FICTIONAL REPORT.\n\nSUBJECT A raised both arms."
 
 
 def fake_run(cases_dir: Path, fail_on: str | None = None):
-    def run(case, src, report_text, log=print, progress=None, origin="demo", publish=True):
+    def run(case, src, report_text, log=print, progress=None, origin="demo", publish=True, source_url=None,
+            source_title=None, source_start_seconds=0):
         if case == "slow":  # long pose step: reports progress until stopped (or 5 s)
             for i in range(500):
                 progress("Preparing footage and tracking body pose", 0.05 + i / 2000)
@@ -28,7 +30,8 @@ def fake_run(cases_dir: Path, fail_on: str | None = None):
         progress("Checking each claim against the footage", 0.6)
         if case == fail_on:
             raise RuntimeError("model unavailable")
-        res = CaseResult(case=case, origin=origin, model="test", created_at=datetime.now(timezone.utc).isoformat(),
+        res = CaseResult(case=case, origin=origin, source_url=source_url, source_title=source_title,
+                         source_start_seconds=source_start_seconds, model="test", created_at=datetime.now(timezone.utc).isoformat(),
                          report_text=report_text, duration_sec=5, video_url=f"/case-media/{case}/clip.mp4",
                          annotated_video_url=f"/case-media/{case}/annotated.mp4", results=[], pose_events=[])
         if publish:
@@ -99,6 +102,45 @@ class CaseUploadTests(unittest.TestCase):
             wait(client, "both")
             self.assertEqual((self.cases / "both" / "report.txt").read_text(encoding="utf-8"), REPORT)
 
+    def test_youtube_video_queues_and_keeps_source_metadata(self):
+        with patch.object(main.youtube, "download_video", return_value=(self.cases / "original.mp4", "Source title")) as download:
+            (self.cases / "original.mp4").write_bytes(b"video")
+            self.duration = 180.0
+            with TestClient(main.app) as client:
+                response = client.post("/cases", data={"name": "yt", "report_text": REPORT,
+                    "youtube_url": "https://youtu.be/AbR3-Kpzw6k?t=120"})
+                self.assertEqual(response.status_code, 202, response.text)
+                self.assertEqual(wait(client, "yt")["status"], "complete")
+                download.assert_called_once_with("https://www.youtube.com/watch?v=AbR3-Kpzw6k", self.cases / "yt")
+                result = client.get("/cases/yt").json()
+                self.assertEqual(result["source_url"], "https://www.youtube.com/watch?v=AbR3-Kpzw6k")
+                self.assertEqual(result["source_title"], "Source title")
+                self.assertEqual(result["source_start_seconds"], 0)
+
+    def test_youtube_rejects_non_youtube_url(self):
+        with TestClient(main.app) as client:
+            base = {"report_text": REPORT, "youtube_url": "https://youtube.com/watch?v=AbR3-Kpzw6k"}
+            self.assertEqual(client.post("/cases", data={**base, "youtube_url": "https://example.com/watch?v=AbR3-Kpzw6k"}).status_code, 400)
+
+    def test_long_video_check_reaches_later_windows_on_original_timeline(self):
+        claim = Claim(id="c1", text="A person fired a gun", claim_type="visual")
+        starts = []
+        def check(g, path, claims, pose, duration, overlay, segment_start, segment_end):
+            starts.append(segment_start)
+            if segment_start < 100:
+                return [ClaimCheck(claim_id="c1", observation="No relevant moment here",
+                                   status="insufficient_footage", window_start_sec=None,
+                                   window_end_sec=None, person_track_id=None)]
+            return [ClaimCheck(claim_id="c1", observation="The action is visible near the end",
+                               status="consistent", window_start_sec=5, window_end_sec=8,
+                               person_track_id=None)]
+        with patch.object(claim_cases.video, "for_model_window"), patch.object(claim_cases.ck, "check", side_effect=check):
+            checks = claim_cases._check_recording(None, self.cases / "source.mp4", self.cases,
+                                                  [claim], [], 130, True, lambda *_: None)
+        self.assertEqual(starts, [0.0, 55.0, 110.0])
+        self.assertEqual(checks["c1"].status, "consistent")
+        self.assertEqual((checks["c1"].window_start_sec, checks["c1"].window_end_sec), (115.0, 118.0))
+
     def test_validation(self):
         with TestClient(main.app) as client:
             self.assertEqual(self.post(client, video=("clip.avi", b"video")).status_code, 415)
@@ -107,8 +149,8 @@ class CaseUploadTests(unittest.TestCase):
             self.assertEqual(self.post(client, video=("clip.mp4", b"")).status_code, 400)
             self.assertEqual(self.post(client, name="!!!").status_code, 400)
             self.duration = 120.0
-            self.assertEqual(self.post(client, name="long").status_code, 413)
-            self.assertFalse((self.cases / "long").exists())
+            self.assertEqual(self.post(client, name="long").status_code, 202)
+            self.assertEqual(wait(client, "long")["status"], "complete")
             with patch.dict(os.environ, {"GOOGLE_API_KEY": ""}):
                 self.assertEqual(self.post(client).status_code, 503)
 

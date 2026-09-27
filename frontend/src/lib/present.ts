@@ -95,6 +95,34 @@ export const CASE_META: Record<string, { title: string; setting: string; camera:
     source: "Publicly released body-worn camera footage (YouTube mXw1nvF3klk, 15:20–16:20)",
     sourceUrl: "https://www.youtube.com/watch?v=mXw1nvF3klk&t=920s",
   },
+  gunpoint: {
+    title: "Weapons call response",
+    setting: "Day · townhouse parking lot",
+    camera: "Axon Body 3",
+    source: "Body-worn camera footage re-published by Audit the Audit (YouTube yOegqWf4pM4, 0:48–1:10)",
+    sourceUrl: "https://www.youtube.com/watch?v=yOegqWf4pM4&t=48s",
+  },
+  porch: {
+    title: "Porch identification stop",
+    setting: "Night · front porch",
+    camera: "Axon Body 3",
+    source: "Body-worn camera footage re-published by Audit the Audit (YouTube LPFw5-sIImk, 7:40–8:25)",
+    sourceUrl: "https://www.youtube.com/watch?v=LPFw5-sIImk&t=460s",
+  },
+  hospital: {
+    title: "Hospital welfare check",
+    setting: "Indoor · hospital lounge",
+    camera: "Axon Body 3",
+    source: "Body-worn camera footage re-published by Audit the Audit (YouTube qKlP-zdpj48, 4:13–5:00)",
+    sourceUrl: "https://www.youtube.com/watch?v=qKlP-zdpj48&t=253s",
+  },
+  parkedcar: {
+    title: "Parked-car contact",
+    setting: "Night · roadside",
+    camera: "Axon Body 4",
+    source: "Body-worn camera footage re-published by Audit the Audit (YouTube G19anoWa2LA, 1:30–3:05)",
+    sourceUrl: "https://www.youtube.com/watch?v=G19anoWa2LA&t=90s",
+  },
 };
 
 export const caseMeta = (id: string) =>

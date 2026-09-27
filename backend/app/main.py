@@ -27,12 +27,12 @@ from .ledger import CaseResult
 from .storage import LOCK, read, save
 from .runtime import Cancelled, Control, current
 from .uploads import UploadLimit
+from . import youtube
 
 DATA = Path(os.getenv("DATA_DIR", Path(__file__).resolve().parents[2] / "data")) / "analyses"
 DATA.mkdir(parents=True, exist_ok=True)
 CASES.mkdir(parents=True, exist_ok=True)
 CASE_ID = re.compile(r"[a-z0-9_-]+")
-MAX_CLIP_SEC = float(os.getenv("MAX_CLIP_SEC", "90"))
 MAX_REPORT_BYTES = 200_000
 ACTIVE = ("queued", "processing")
 log = logging.getLogger("uvicorn.error")
@@ -169,7 +169,7 @@ def cleanup(job, folder):
     return True
 
 
-def process_task(task, folder, original, report_text):
+def process_task(task, folder, original, report_text, source_url=None):
     job, control = task.job, task.control
     key = str(folder)
     done = threading.Event()
@@ -210,11 +210,21 @@ def process_task(task, folder, original, report_text):
             progress("Starting", 0)
         monitor = threading.Thread(target=heartbeat, daemon=True)
         monitor.start()
+        source_metadata = {}
+        if source_url:
+            progress("Downloading YouTube video", 0.01)
+            original, source_title = youtube.download_video(source_url, folder)
+            with LOCK:
+                control.check()
+                job.filename = source_title
+                persist(job, folder)
+            ffmpeg.duration(original)
+            source_metadata = {"source_url": source_url, "source_title": source_title}
         if report_text is None:
             result = run(original, folder, job.id, job.filename, progress)
         else:
             result = claim_cases.run(job.id, original, report_text, log=log.info,
-                                     progress=progress, origin="upload", publish=False)
+                                     progress=progress, origin="upload", publish=False, **source_metadata)
         with LOCK:
             control.check()  # includes a stop arriving during the very last claim
             if not owns_folder():
@@ -251,12 +261,12 @@ def process_task(task, folder, original, report_text):
         current.reset(token)
 
 
-def submit(job, folder, original, report_text=None):
+def submit(job, folder, original, report_text=None, source_url=None):
     with LOCK:
         task = Task(job.model_copy(), Control())
         app.state.tasks[str(folder)] = task
         try:
-            task.future = app.state.worker.submit(process_task, task, folder, original, report_text)
+            task.future = app.state.worker.submit(process_task, task, folder, original, report_text, source_url)
         except RuntimeError:
             del app.state.tasks[str(folder)]
             job.status, job.stage, job.error = "failed", "Not scheduled", "Server is shutting down; retry the upload."
@@ -269,6 +279,8 @@ def prerequisites(video):
         raise HTTPException(503, "Set GOOGLE_API_KEY in backend/.env first")
     if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
         raise HTTPException(503, "Install FFmpeg and ffprobe first")
+    if video is None:
+        return ".mp4"
     suffix = Path(video.filename or "").suffix.lower()
     if suffix not in (".mp4", ".mov"):
         raise HTTPException(415, "Upload an MP4 or MOV video")
@@ -406,9 +418,18 @@ def read_report(report_text, report):
 
 
 @app.post("/cases", response_model=Job, status_code=202)
-def create_case(video: UploadFile = File(...), report_text: str = Form(""),
-                report: UploadFile | None = File(None), name: str = Form("")):
+def create_case(video: UploadFile | None = File(None), report_text: str = Form(""),
+                report: UploadFile | None = File(None), name: str = Form(""),
+                youtube_url: str = Form("")):
     suffix = prerequisites(video)
+    if bool(video) == bool(youtube_url.strip()):
+        raise HTTPException(400, "Choose either a video upload or a YouTube link")
+    canonical_url = None
+    if youtube_url.strip():
+        try:
+            canonical_url = youtube.validate_youtube_url(youtube_url)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc))
     text = read_report(report_text, report)
     case = new_case_id(name)
     folder = CASES / case
@@ -428,18 +449,18 @@ def create_case(video: UploadFile = File(...), report_text: str = Form(""),
             raise HTTPException(409, f"A case named '{case}' already exists; choose another name")
     original = folder / f"original{suffix}"
     try:
-        copy_video(video, original)
-        try:
-            dur = ffmpeg.duration(original)
-        except Exception:
-            raise HTTPException(400, "Could not read the video; is it a playable MP4 or MOV?")
-        if dur > MAX_CLIP_SEC:
-            raise HTTPException(413, f"The clip is {dur:.0f} s long; trim it to {MAX_CLIP_SEC:.0f} s or less")
+        if not canonical_url:
+            copy_video(video, original)
+            try:
+                ffmpeg.duration(original)
+            except Exception:
+                raise HTTPException(400, "Could not read the video; is it a playable MP4 or MOV?")
         (folder / "report.txt").write_text(text, encoding="utf-8")
-        job = Job(id=case, filename=Path(video.filename).name, created_at=now())
+        job = Job(id=case, filename=("YouTube video" if canonical_url else Path(video.filename or "video.mp4").name),
+                  created_at=now())
         with LOCK:
             persist(job, folder)
-            submit(job, folder, original, text)
+            submit(job, folder, original, text, canonical_url)
     except HTTPException as exc:
         if exc.status_code != 503:
             remove_folder(folder)

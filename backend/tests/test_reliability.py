@@ -71,6 +71,23 @@ class ReliabilityTests(unittest.TestCase):
             self.assertFalse((self.cases / "late").exists())
             self.assertEqual(client.get("/cases").json(), [])
 
+    def test_stop_youtube_download_cleans_up_and_releases_worker(self):
+        started = threading.Event()
+        def download_command(*args, **kwargs):
+            started.set()
+            return video.run([sys.executable, "-c", "import time; time.sleep(30)"], timeout_sec=5)
+        with patch.object(main.youtube, "run", side_effect=download_command), TestClient(main.app) as client:
+            response = client.post("/cases", data={"name": "importing", "report_text": fixtures.REPORT,
+                                                   "youtube_url": "https://youtu.be/AbR3-Kpzw6k"})
+            self.assertEqual(response.status_code, 202)
+            self.assertTrue(started.wait(2))
+            self.assertEqual(client.get("/cases/importing/job").json()["stage"], "Downloading YouTube video")
+            self.assertEqual(client.delete("/cases/importing").status_code, 200)
+            self.assertEqual(self.post(client, name="after-import").status_code, 202)
+            self.assertEqual(fixtures.wait(client, "after-import")["status"], "complete")
+            self.assertEqual(client.get("/cases/importing/job").status_code, 404)
+            self.assertFalse((self.cases / "importing").exists())
+
     def test_finished_and_failed_jobs_can_be_deleted(self):
         with TestClient(main.app) as client:
             for name in ("done", "boom"):

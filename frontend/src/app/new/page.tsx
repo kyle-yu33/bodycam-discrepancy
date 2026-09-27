@@ -5,20 +5,8 @@ import { useRouter } from "next/navigation";
 import { createCase, getCaseJob, getHealth, stopCase, type CaseJob, type Health } from "@/lib/ledger";
 import { QueueList, useCaseJobs } from "@/components/review/Queue";
 
-const MAX_CLIP_SEC = 90; // backend MAX_CLIP_SEC: full clips go to Gemini inline
 const POLL_MS = 2000;
-
-// Reads a local video's duration without uploading it.
-function videoDuration(file: File): Promise<number> {
-  return new Promise((resolve) => {
-    const url = URL.createObjectURL(file);
-    const v = document.createElement("video");
-    v.preload = "metadata";
-    v.onloadedmetadata = () => { URL.revokeObjectURL(url); resolve(v.duration); };
-    v.onerror = () => { URL.revokeObjectURL(url); resolve(NaN); };
-    v.src = url;
-  });
-}
+type SourceMode = "upload" | "youtube";
 
 // Every upload the backend is running or holding, so a waiting job can see what is ahead of it.
 function AnalysisQueue({ mine, onStopMine }: { mine?: string; onStopMine: () => void }) {
@@ -41,7 +29,8 @@ export default function NewCase() {
   const [health, setHealth] = useState<Health | null>(null);
   const [healthError, setHealthError] = useState("");
   const [video, setVideo] = useState<File | null>(null);
-  const [duration, setDuration] = useState<number | null>(null);
+  const [sourceMode, setSourceMode] = useState<SourceMode>("upload");
+  const [youtubeUrl, setYoutubeUrl] = useState("");
   const [name, setName] = useState("");
   const [report, setReport] = useState("");
   const [reportFile, setReportFile] = useState("");
@@ -95,9 +84,8 @@ export default function NewCase() {
     return () => { alive = false; clearTimeout(timer); };
   }, [jobId, runId, isActive, cancelRequested, router]);
 
-  async function pickVideo(file: File | null) {
+  function pickVideo(file: File | null) {
     setVideo(file);
-    setDuration(file ? await videoDuration(file) : null);
   }
 
   async function attachReport(file: File | null) {
@@ -109,14 +97,15 @@ export default function NewCase() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!video) return;
+    if (sourceMode === "upload" && !video) return;
     setError("");
     setNotice("");
     setSubmitting(true);
     setUploadPercent(0);
     setStoppingMine(false);
     const form = new FormData();
-    form.append("video", video);
+    if (sourceMode === "upload" && video) form.append("video", video);
+    if (sourceMode === "youtube") form.append("youtube_url", youtubeUrl);
     form.append("report_text", report);
     form.append("name", name);
     try {
@@ -151,8 +140,8 @@ export default function NewCase() {
   }
 
   const blocked = health && (!health.gemini_configured || !health.ffmpeg_available);
-  const tooLong = duration != null && duration > MAX_CLIP_SEC;
-  const canSubmit = !!video && report.trim().length > 0 && !tooLong && !blocked && !submitting;
+  const canSubmit = (sourceMode === "upload" ? !!video : !!youtubeUrl.trim())
+    && report.trim().length > 0 && !blocked && !submitting;
   const running = job && (job.status === "queued" || job.status === "processing");
   const elapsed = started ? Math.max(0, Math.round((now - started) / 1000)) : 0;
 
@@ -167,7 +156,7 @@ export default function NewCase() {
       <main className="mx-auto max-w-2xl p-6">
         <h1 className="text-xl font-semibold tracking-tight">Analyze a clip against a report</h1>
         <p className="mt-1 text-sm text-muted">
-          Upload body-worn camera footage and the written report. Each claim in the report is checked against the footage and
+          Add body-worn camera footage and the written report. Each claim in the report is checked against the footage and
           linked to the moment that bears on it.
         </p>
 
@@ -187,7 +176,7 @@ export default function NewCase() {
           <section className="el-fade-up mt-6 rounded-xl border border-hairline bg-surface p-5" aria-live="polite">
             <h2 className="text-base font-semibold">Analyzing {job.filename}</h2>
             <p className="mt-1 text-sm text-muted">
-              {job.status === "complete" ? "Done. Opening the review…"
+              {job.status === "complete" ? "Done. Opening the reviewâ€¦"
                 : job.status === "queued" ? "Waiting for another analysis to finish. Cases run one at a time."
                 : job.stage}
             </p>
@@ -195,45 +184,54 @@ export default function NewCase() {
               <div className="h-full rounded-full bg-brand transition-all duration-700" style={{ width: `${Math.round(job.progress * 100)}%` }} />
             </div>
             <p className="mt-3 text-xs text-muted">
-              {elapsed} s elapsed · Estimated progress; some steps may take several minutes. You can leave this page; the case appears in the case list when it&apos;s done.
+              {elapsed} s elapsed Â· Estimated progress; some steps may take several minutes. You can leave this page; the case appears in the case list when it&apos;s done.
             </p>
             {error && <p className="mt-2 text-xs text-review" role="alert">{error}</p>}
             {running && job.updated_at && now - Date.parse(job.updated_at) > 30000 && <p className="mt-2 text-xs text-muted">This step has not advanced for {Math.floor((now - Date.parse(job.updated_at)) / 1000)} seconds. Model startup and processing can take longer on the first run.</p>}
-            {running && job.heartbeat_at && <p className="mt-2 text-xs text-muted">{now - Date.parse(job.heartbeat_at) > 15000 ? "Worker heartbeat delayed. Checking for an update…" : "Worker active"}</p>}
+            {running && job.heartbeat_at && <p className="mt-2 text-xs text-muted">{now - Date.parse(job.heartbeat_at) > 15000 ? "Worker heartbeat delayed. Checking for an updateâ€¦" : "Worker active"}</p>}
             {running && (
               <button onClick={stopMine} disabled={stoppingMine || job.cancellation_requested} className="mt-4 rounded-lg border border-hairline px-3 py-1.5 text-sm text-review hover:bg-review-bg">
-                {stoppingMine || job.cancellation_requested ? "Stopping after the current operation…" : "Stop analysis"}
+                {stoppingMine || job.cancellation_requested ? "Stopping after the current operationâ€¦" : "Stop analysis"}
               </button>
             )}
           </section>
         ) : (
           <form onSubmit={submit} className="mt-6 space-y-5 rounded-xl border border-hairline bg-surface p-5">
-            <label className="block">
+            <fieldset className="block">
               <span className="text-sm font-medium">Footage</span>
-              <span className="block text-xs text-muted">MP4 or MOV with its original audio, {MAX_CLIP_SEC} seconds or less.</span>
-              <input type="file" accept=".mp4,.mov,video/mp4,video/quicktime" required
-                onChange={(e) => pickVideo(e.target.files?.[0] ?? null)}
-                className="mt-2 block w-full cursor-pointer text-sm file:mr-3 file:rounded-lg file:border file:border-transparent file:bg-sunken file:px-3 file:py-2 file:text-sm file:text-ink-2 file:transition-[background-color,border-color,color,transform] file:duration-200 hover:file:scale-[1.03] hover:file:border-brass/50 hover:file:bg-hairline hover:file:text-ink motion-reduce:hover:file:scale-100" />
-              {tooLong && (
-                <span className="mt-1 block text-xs text-review">
-                  This clip is {Math.round(duration!)} s long. Trim it to {MAX_CLIP_SEC} s or less first.
-                </span>
-              )}
-            </label>
+              <span className="block text-xs text-muted">Upload MP4/MOV footage or import a full video from YouTube.</span>
+              <div className="mt-2 flex gap-2" role="group" aria-label="Video source">
+                <button type="button" aria-pressed={sourceMode === "upload"} onClick={() => setSourceMode("upload")}
+                  className={`rounded-lg border px-3 py-2 text-sm ${sourceMode === "upload" ? "border-brand text-brand" : "border-hairline"}`}>Upload video</button>
+                <button type="button" aria-pressed={sourceMode === "youtube"} onClick={() => setSourceMode("youtube")}
+                  className={`rounded-lg border px-3 py-2 text-sm ${sourceMode === "youtube" ? "border-brand text-brand" : "border-hairline"}`}>YouTube link</button>
+              </div>
+              {sourceMode === "upload" ? <>
+                <input type="file" accept=".mp4,.mov,video/mp4,video/quicktime" required
+                  onChange={(e) => pickVideo(e.target.files?.[0] ?? null)}
+                  className="mt-2 block w-full cursor-pointer text-sm file:mr-3 file:rounded-lg file:border file:border-transparent file:bg-sunken file:px-3 file:py-2 file:text-sm file:text-ink-2 file:transition-[background-color,border-color,color,transform] file:duration-200 hover:file:scale-[1.03] hover:file:border-brass/50 hover:file:bg-hairline hover:file:text-ink motion-reduce:hover:file:scale-100" />
+              </> : <div className="mt-3 space-y-3">
+                <label className="block text-sm">YouTube video link
+                  <input type="url" value={youtubeUrl} onChange={(e) => setYoutubeUrl(e.target.value)} placeholder="https://www.youtube.com/watch?v=â€¦" required
+                    className="mt-1 block w-full rounded-lg border border-hairline bg-sunken px-3 py-2 text-sm" />
+                </label>
+                <p className="text-xs text-muted">The whole video is imported and analyzed, even if the link contains a timestamp.</p>
+              </div>}
+            </fieldset>
 
             <div>
               <div className="flex items-baseline justify-between gap-3">
                 <label htmlFor="report" className="text-sm font-medium">Report</label>
                 <button type="button" onClick={() => reportInput.current?.click()}
                   className="rounded-md px-2 py-1 text-xs text-brand underline decoration-brand/40 underline-offset-2 transition-[background-color,color,text-decoration-color,transform] duration-200 hover:scale-[1.03] hover:bg-hairline hover:text-ink hover:decoration-ink motion-reduce:hover:scale-100">
-                  {reportFile ? `Attached ${reportFile} · replace` : "Attach .txt instead"}
+                  {reportFile ? `Attached ${reportFile} Â· replace` : "Attach .txt instead"}
                 </button>
                 <input ref={reportInput} type="file" accept=".txt,text/plain" hidden
                   onChange={(e) => attachReport(e.target.files?.[0] ?? null)} />
               </div>
               <span className="block text-xs text-muted">Paste the narrative, or attach a text file and edit it here.</span>
               <textarea id="report" value={report} onChange={(e) => setReport(e.target.value)} rows={10} required
-                placeholder="I conducted a traffic stop on…"
+                placeholder="I conducted a traffic stop onâ€¦"
                 className="mt-2 block w-full rounded-lg border border-hairline bg-sunken p-3 text-sm" />
             </div>
 
@@ -255,7 +253,7 @@ export default function NewCase() {
             <div className="flex items-center gap-3">
               <button type="submit" disabled={!canSubmit}
                 className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white shadow-sm hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60">
-                {submitting ? "Uploading…" : "Analyze"}
+                {submitting ? (sourceMode === "youtube" ? "Importingâ€¦" : "Uploadingâ€¦") : "Analyze"}
               </button>
               <Link href="/" className="text-sm text-muted hover:text-ink">Cancel</Link>
             </div>

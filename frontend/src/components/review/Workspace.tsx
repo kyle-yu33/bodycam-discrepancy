@@ -217,7 +217,8 @@ export function Workspace({ caseId }: { caseId: string }) {
           src={data ? media(overlay ? data.annotated_video_url : data.video_url) : undefined}
           poster={poster}
           onSeek={seek} onTimeUpdate={onTimeUpdate} onLoadedMetadata={onLoadedMetadata}
-          camera={meta.camera} source={meta.source} sourceUrl={meta.sourceUrl} uploaded={uploaded} />
+          camera={meta.camera} source={data?.source_title ?? meta.source} sourceUrl={data?.source_url ?? meta.sourceUrl}
+          sourceStartSeconds={data?.source_start_seconds ?? 0} uploaded={uploaded} />
         <LedgerPanel phase={phase} step={step} results={results} selected={revealed ? selected : null} onSelect={select}
           onPlay={play} onSeek={seek} onAnalyze={analyze} model={data?.model ?? ""} createdAt={data?.created_at ?? new Date().toISOString()} error={error} />
       </main>
