@@ -1,24 +1,13 @@
 "use client";
-import { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
-import { HowItWorks } from "@/components/review/Chrome";
 
-// The workspace's "How it works" drawer, opened from the home page's header. It is portalled to <body>: the
-// header's backdrop blur would otherwise become the containing block for the drawer's fixed positioning.
+export const HOW_IT_WORKS_ID = "how-it-works";
+
+// Home page header link: glides down to the "Under the hood" section.
 export function HowItWorksButton({ className }: { className?: string }) {
-  const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open]);
-
   return (
-    <>
-      <button onClick={() => setOpen(true)} aria-haspopup="dialog" className={className}>How it works</button>
-      {open && createPortal(<HowItWorks open onClose={() => setOpen(false)} keyboard={false} />, document.body)}
-    </>
+    <a href={`#${HOW_IT_WORKS_ID}`} className={className} onClick={(e) => {
+      e.preventDefault();
+      document.getElementById(HOW_IT_WORKS_ID)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }}>How it works</a>
   );
 }

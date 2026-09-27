@@ -2,17 +2,19 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { listCases, type CaseSummary } from "@/lib/ledger";
-import { caseMeta } from "@/lib/present";
+import { caseMeta, exampleRank } from "@/lib/present";
 import { ArrowRight } from "@/components/review/Icons";
 
-// Every case with a finished analysis, newest first, one row each; a row opens straight onto its results.
+// Every case with a finished analysis: uploads newest first, then the examples strongest first; one row each; a row opens straight onto its results.
 export function RecentCases() {
   const [cases, setCases] = useState<CaseSummary[] | null>(null);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     listCases()
-      .then((all) => setCases([...all].sort((a, b) => b.created_at.localeCompare(a.created_at))))
+      .then((all) => setCases([...all].sort((a, b) =>
+        (a.origin === "demo" ? exampleRank(a.case) : -1) - (b.origin === "demo" ? exampleRank(b.case) : -1)
+        || b.created_at.localeCompare(a.created_at))))
       .catch(() => setFailed(true));
   }, []);
 

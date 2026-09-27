@@ -128,6 +128,13 @@ export const CASE_META: Record<string, { title: string; setting: string; camera:
 export const caseMeta = (id: string) =>
   CASE_META[id] ?? { title: id, setting: "", camera: "", source: "Publicly released body-worn camera footage", sourceUrl: "" };
 
+// Demo cases, strongest first; lists show examples in this order, and "See an example" opens the first.
+export const EXAMPLE_ORDER = ["porch", "hospital", "sfst1", "sfst2", "gunpoint"];
+export const exampleRank = (id: string) => {
+  const i = EXAMPLE_ORDER.indexOf(id);
+  return i < 0 ? EXAMPLE_ORDER.length : i;
+};
+
 // ---------- Report ----------
 
 export interface ParsedReport {

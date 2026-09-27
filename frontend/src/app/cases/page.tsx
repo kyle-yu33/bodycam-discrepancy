@@ -1,11 +1,12 @@
 "use client";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { AppHeader } from "@/components/AppHeader";
+import { AppActions } from "@/components/AppHeader";
+import { SiteHeader } from "@/components/site/SiteHeader";
 import { Transfers } from "@/components/Uploads";
 import { useCaseJobs } from "@/components/review/Queue";
 import { listCases, type CaseSummary } from "@/lib/ledger";
-import { caseMeta } from "@/lib/present";
+import { caseMeta, exampleRank } from "@/lib/present";
 export default function Cases() {
   const [cases, setCases] = useState<CaseSummary[]>([]);
   const [error, setError] = useState("");
@@ -19,8 +20,8 @@ export default function Cases() {
   const ids = new Set([...cases.map((c) => c.case), ...allJobs.map((j) => j.id)]);
   const rows = [...ids].map((id) => ({ id, result: cases.find((c) => c.case === id), job: allJobs.find((j) => j.id === id) }))
     .filter(({ id, result }) => (result?.origin === "demo") === examples && caseMeta(id).title.toLowerCase().includes(search.toLowerCase()))
-    .sort((a, b) => (b.job?.created_at ?? b.result?.created_at ?? "").localeCompare(a.job?.created_at ?? a.result?.created_at ?? ""));
-  return <div className="min-h-screen"><AppHeader /><main className="mx-auto max-w-5xl space-y-6 p-6">
+    .sort((a, b) => (examples ? exampleRank(a.id) - exampleRank(b.id) : 0) || (b.job?.created_at ?? b.result?.created_at ?? "").localeCompare(a.job?.created_at ?? a.result?.created_at ?? ""));
+  return <div className="min-h-screen"><SiteHeader><AppActions /></SiteHeader><main className="mx-auto max-w-5xl space-y-6 p-6">
     <div><h1 className="font-serif text-3xl">Cases</h1><p className="mt-2 text-sm text-muted">Upload footage, follow its analysis, and review the evidence.</p></div>
     <Transfers knownIds={[...ids]} />
     {active.length > 0 && <p className="text-sm text-muted">{active.filter((j) => j.status === "processing").length} analyzing · {active.filter((j) => j.status === "queued").length} queued. Open Queue for progress and processing order.</p>}

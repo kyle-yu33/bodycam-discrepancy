@@ -2,19 +2,20 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, ShieldCheck } from "@/components/review/Icons";
-import { HowItWorksButton } from "@/components/site/HowItWorksButton";
-import { FootageIllustration, PoseIllustration, RecheckIllustration } from "@/components/site/Illustrations";
+import { HOW_IT_WORKS_ID, HowItWorksButton } from "@/components/site/HowItWorksButton";
+import { CloudBackdrop, FootageIllustration, PoseIllustration, RecheckIllustration } from "@/components/site/Illustrations";
 import { RecentCases } from "@/components/site/RecentCases";
 import { Reveal } from "@/components/site/Reveal";
 import { SiteHeader } from "@/components/site/SiteHeader";
 import { BUTTON_PRIMARY, EYEBROW } from "@/components/site/styles";
+import { EXAMPLE_ORDER } from "@/lib/present";
 
 export const metadata: Metadata = {
   title: "evidently · Check a police report against body-worn camera footage",
 };
 
-// "See an example" opens a cached demo case (NEXT_PUBLIC_DEFAULT_CASE, else sfst2).
-const EXAMPLE_HREF = `/cases/${process.env.NEXT_PUBLIC_DEFAULT_CASE ?? "sfst2"}`;
+// "See an example" opens the strongest cached demo case.
+const EXAMPLE_HREF = `/cases/${EXAMPLE_ORDER[0]}`;
 
 const NAV = "hidden h-9 items-center rounded-md px-3 text-sm text-ink-2 transition-colors hover:bg-sunken hover:text-ink sm:inline-flex";
 const H2 = "mt-4 text-balance font-serif text-[38px] font-medium leading-[1.08] tracking-tight text-ink sm:text-5xl";
@@ -89,8 +90,9 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="border-t border-hairline">
-          <div className="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:py-32">
+        <section id={HOW_IT_WORKS_ID} className="relative scroll-mt-14 border-t border-hairline">
+          <CloudBackdrop />
+          <div className="relative mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:py-32">
             <Reveal className="max-w-2xl">
               <p className={EYEBROW}>Under the hood</p>
               <h2 className={H2}>Computer vision that shows its work.</h2>

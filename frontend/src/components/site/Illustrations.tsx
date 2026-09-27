@@ -98,3 +98,20 @@ export function RecheckIllustration({ className = "" }: { className?: string }) 
     </svg>
   );
 }
+
+/** Drifting smoke behind the "Under the hood" section, in the ivory of the hero's watercolour cloud: fractal
+ *  noise thresholded into soft billows, feathered at the edges so it dissolves into the page. */
+export function CloudBackdrop() {
+  return (
+    <svg aria-hidden className="pointer-events-none absolute inset-0 h-full w-full opacity-[0.26]
+      [mask-image:radial-gradient(ellipse_70%_60%_at_50%_50%,black_30%,transparent_100%)]">
+      <filter id="el-cloud" x="0" y="0" width="100%" height="100%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.0035 0.006" numOctaves="4" seed="11" />
+        {/* Ivory smoke; alpha from the noise, lifted so only its brighter half shows. */}
+        <feColorMatrix values="0 0 0 0 0.95  0 0 0 0 0.91  0 0 0 0 0.86  2.6 0 0 0 -1.05" />
+        <feGaussianBlur stdDeviation="3" />
+      </filter>
+      <rect width="100%" height="100%" filter="url(#el-cloud)" />
+    </svg>
+  );
+}
