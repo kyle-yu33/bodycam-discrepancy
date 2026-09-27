@@ -2,7 +2,7 @@
 
 ## Product boundary
 
-EvidenceLens is a review aid. It may help a human locate and inspect evidence; it must not make legal, credibility, or moral judgments.
+evidently is a review aid. It may help a human locate and inspect evidence; it must not make legal, credibility, or moral judgments.
 
 ## Never claim
 

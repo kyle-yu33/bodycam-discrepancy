@@ -22,7 +22,7 @@ const garamond = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "EvidenceLens · Claim-evidence review",
+  title: "evidently · Claim-evidence review",
   description: "Check each claim in a written report against body-worn camera footage, with the evidence linked.",
 };
 

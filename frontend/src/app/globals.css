@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* EvidenceLens: chambers at night. Espresso and ivory, with oxblood for the brand and brass for what is
+/* evidently: chambers at night. Espresso and ivory, with oxblood for the brand and brass for what is
    active or selected. Statuses stay muted except "review recommended" (honey amber); maroon is never used
    for a status, so nothing reads as red (context/frontend.md). The footage stage is the darkest surface.
    Fonts are bundled (@fontsource), so the demo works offline. */
@@ -106,6 +106,46 @@
   .el-mark,
   .el-enter {
     animation: none;
+  }
+}
+
+/* Scroll reveal (components/site/Reveal.tsx): fade up once; line art with pathLength="1" draws itself,
+   each group after its own --d delay. */
+.el-reveal {
+  opacity: 0;
+  transform: translateY(14px);
+  transition: opacity 700ms ease-out, transform 700ms ease-out;
+}
+.el-reveal[data-shown] {
+  opacity: 1;
+  transform: none;
+}
+/* The shown rule selects by element type, not [pathLength]: the build lowercases that selector, and Chrome then
+   never re-styles the SVG shapes when data-shown appears on the ancestor, so they stayed hidden. Shapes without
+   pathLength get no dash array, so the animation has no visible effect on them. */
+.el-reveal .el-draw [pathLength] {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+}
+.el-reveal[data-shown] .el-draw :is(path, rect, circle, ellipse, line, polyline) {
+  animation-name: el-draw;
+  animation-duration: 2200ms;
+  animation-timing-function: cubic-bezier(0.45, 0, 0.2, 1);
+  animation-delay: var(--d, 0ms);
+  animation-fill-mode: both;
+}
+@keyframes el-draw {
+  from { stroke-dashoffset: 1; }
+  to { stroke-dashoffset: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .el-reveal,
+  .el-reveal .el-draw [pathLength] {
+    opacity: 1;
+    transform: none;
+    transition: none;
+    animation: none;
+    stroke-dashoffset: 0;
   }
 }
 

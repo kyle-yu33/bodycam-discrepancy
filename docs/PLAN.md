@@ -1,11 +1,11 @@
-# EvidenceLens: plan and workflow
+# evidently: plan and workflow
 
 Status as of 2026-09-26. How the pieces fit, where each one stands, and what's left before judging.
 Product rules and wording live in [`context/`](../context/README.md); this file is the build plan.
 
 ## 1. What we're building
 
-A defence lawyer has a police report and bodycam footage. EvidenceLens splits the report into
+A defence lawyer has a police report and bodycam footage. evidently splits the report into
 individual claims, checks each against the video, and shows a ledger. Every claim gets one of four
 statuses, linked to the exact moment in the footage:
 

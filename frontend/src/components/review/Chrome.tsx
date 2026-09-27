@@ -18,7 +18,7 @@ export function StatusBadge({ status, size = "sm" }: { status: Status; size?: "s
   );
 }
 
-function Logo() {
+export function Logo() {
   return (
     <svg viewBox="0 0 32 32" className="h-7 w-7" aria-hidden>
       <rect width="32" height="32" rx="7" className="fill-brand" />
@@ -39,7 +39,7 @@ export function TopBar({ caseId, cases, phase, origin, provenance, onAnalyze, on
     <header className="flex h-14 shrink-0 items-center gap-4 border-b border-hairline bg-canvas/70 px-4 backdrop-blur-md sm:gap-6 sm:px-6">
       <Link href="/" className="flex shrink-0 items-center gap-2.5">
         <Logo />
-        <span className="font-serif text-[21px] font-semibold tracking-tight text-ink">EvidenceLens</span>
+        <span className="font-serif text-[21px] font-semibold tracking-tight text-ink">evidently</span>
       </Link>
 
       <CaseTabs caseId={caseId} cases={cases} />
@@ -155,15 +155,16 @@ export function AnalyzeProgress({ step, model, createdAt }: { step: number; mode
   );
 }
 
-export function HowItWorks({ open, onClose }: { open: boolean; onClose: () => void }) {
+/** keyboard: list the workspace shortcuts (off where they don't apply, e.g. the home page). */
+export function HowItWorks({ open, onClose, keyboard = true }: { open: boolean; onClose: () => void; keyboard?: boolean }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-[2px]" onClick={onClose} role="dialog" aria-modal aria-label="How EvidenceLens works">
+    <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-[2px]" onClick={onClose} role="dialog" aria-modal aria-label="How evidently works">
       <div className="el-enter h-full w-full max-w-110 overflow-y-auto border-l border-hairline bg-raised px-8 py-7 shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between">
           <div>
             <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted">Method</p>
-            <h2 className="mt-1 font-serif text-[26px] text-ink">How EvidenceLens works</h2>
+            <h2 className="mt-1 font-serif text-[26px] text-ink">How evidently works</h2>
           </div>
           <button onClick={onClose} className="rounded-md p-2 text-muted hover:bg-sunken hover:text-ink" aria-label="Close">
             <CloseIcon />
@@ -192,15 +193,17 @@ export function HowItWorks({ open, onClose }: { open: boolean; onClose: () => vo
             </li>
           ))}
         </ul>
-        <h3 className="mt-8 text-[11px] font-medium uppercase tracking-[0.14em] text-muted">Keyboard</h3>
-        <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-[13px]">
-          {[["↑ ↓", "Previous / next claim"], ["P", "Play the selected moment"], ["O", "Toggle the pose overlay"], ["Esc", "Back to findings"]].map(([k, v]) => (
-            <div key={k} className="contents">
-              <dt><kbd className="rounded border border-hairline bg-sunken px-1.5 py-0.5 font-mono text-[11px] text-ink-2">{k}</kbd></dt>
-              <dd className="text-muted">{v}</dd>
-            </div>
-          ))}
-        </dl>
+        {keyboard && <>
+          <h3 className="mt-8 text-[11px] font-medium uppercase tracking-[0.14em] text-muted">Keyboard</h3>
+          <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-[13px]">
+            {[["↑ ↓", "Previous / next claim"], ["P", "Play the selected moment"], ["O", "Toggle the pose overlay"], ["Esc", "Back to findings"]].map(([k, v]) => (
+              <div key={k} className="contents">
+                <dt><kbd className="rounded border border-hairline bg-sunken px-1.5 py-0.5 font-mono text-[11px] text-ink-2">{k}</kbd></dt>
+                <dd className="text-muted">{v}</dd>
+              </div>
+            ))}
+          </dl>
+        </>}
         <p className="mt-8 rounded-lg bg-sunken px-4 py-3 text-xs leading-5 text-ink-2">
           This prototype surfaces source-linked review questions. It does not make legal conclusions. The reports are fictional and written by our team; the footage is publicly released.
         </p>

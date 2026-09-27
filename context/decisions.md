@@ -1,6 +1,6 @@
 # Decision Log
 
-This log records the core decisions that define EvidenceLens. Update it when the team changes a material product, safety, or scope assumption.
+This log records the core decisions that define evidently. Update it when the team changes a material product, safety, or scope assumption.
 
 | Decision | Why | Consequence |
 |---|---|---|

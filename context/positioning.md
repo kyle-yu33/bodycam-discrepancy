@@ -2,7 +2,7 @@
 
 ## Honest market reality
 
-EvidenceLens is not entering an empty category. Legal-tech products already help lawyers review audiovisual evidence, transcribe video, search discovery, build timelines, organize case material, and investigate possible inconsistencies.
+evidently is not entering an empty category. Legal-tech products already help lawyers review audiovisual evidence, transcribe video, search discovery, build timelines, organize case material, and investigate possible inconsistencies.
 
 This validates the problem. It also means we must avoid novelty claims that cannot be supported.
 
@@ -26,14 +26,14 @@ Its public messaging strongly emphasizes **transcription, transcript search, doc
 |---|---|
 | “JusticeText does not use vision AI.” | “We found no public documentation that JusticeText uses vision AI for frame-level verification of physical claims.” |
 | “JusticeText cannot analyze bodycam footage.” | “JusticeText clearly supports bodycam review; its public AI story is primarily transcript/audio-first and evidence-workflow focused.” |
-| “Nobody compares reports with video.” | “EvidenceLens focuses on an explicit claim-to-evidence ledger for visually assessable report claims.” |
-| “Our AI detects lies.” | “EvidenceLens surfaces source-linked visual review questions for a qualified human.” |
+| “Nobody compares reports with video.” | “evidently focuses on an explicit claim-to-evidence ledger for visually assessable report claims.” |
+| “Our AI detects lies.” | “evidently surfaces source-linked visual review questions for a qualified human.” |
 
 Missing public documentation is not proof of a company’s internal architecture. Treat the wording above as a research-bounded public claim.
 
-## EvidenceLens wedge
+## evidently wedge
 
-> **JusticeText is a broad evidence-review platform. EvidenceLens is a focused, visual claim-audit workflow.**
+> **JusticeText is a broad evidence-review platform. evidently is a focused, visual claim-audit workflow.**
 
 The intended distinction is not merely “we use AI on video.” It is:
 
@@ -49,7 +49,7 @@ Do not attack JusticeText. Acknowledge that current products prove the evidence-
 
 Say:
 
-> “Current legal-tech tools help teams search, transcribe, organize, and investigate evidence. EvidenceLens focuses on a narrower trust problem: making each concrete report claim traceable to the visual evidence that supports, challenges, or cannot assess it.”
+> “Current legal-tech tools help teams search, transcribe, organize, and investigate evidence. evidently focuses on a narrower trust problem: making each concrete report claim traceable to the visual evidence that supports, challenges, or cannot assess it.”
 
 ## Real-world thesis
 
