@@ -68,6 +68,8 @@ class ClaimResult(BaseModel):
     downgraded: bool = False                # a first-pass flag the re-check did not confirm
     first_pass_observation: Optional[str] = None  # the first pass's text when a re-check replaced it; `observation`
                                                   # then holds the re-check's, so it always agrees with `status`
+    adjudication: Optional[str] = None      # third look's text, when the first pass and the re-check contradicted
+                                            # each other; it decided the status and is also `observation`
     evidence_frames: list[str] = []         # media URLs relative to the API base
     pose_events: list[PoseEvent] = []       # pose events overlapping the window
 

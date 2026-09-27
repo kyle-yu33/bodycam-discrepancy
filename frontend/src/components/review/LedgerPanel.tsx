@@ -168,11 +168,17 @@ export function LedgerPanel({ phase, step, results, selected, onSelect, onPlay, 
             <div className="rounded-lg border border-hairline p-4">
               <p className={`flex items-center gap-2 text-[13px] font-medium ${r.status === "insufficient_footage" ? "text-insufficient" : "text-consistent"}`}>
                 {r.status === "insufficient_footage" ? <DashedCircle className="h-4 w-4" /> : <CheckCircle className="h-4 w-4" />}
-                {r.status === "potential_inconsistency" ? "Confirmed on the original footage"
+                {r.adjudication ? "The first two reviews contradicted each other; a third review of the footage decided"
+                  : r.status === "potential_inconsistency" ? "Confirmed on the original footage"
                   : r.status === "consistent" ? "The re-check saw what the claim describes"
                   : "The re-check couldn't settle it, so marked insufficient footage"}
               </p>
-              {r.first_pass_observation ? (
+              {r.adjudication ? (
+                <>
+                  <p className="mt-2 text-sm leading-6 text-ink-2">First review: {r.first_pass_observation}</p>
+                  <p className="mt-2 text-sm leading-6 text-ink-2">Re-check: {r.second_look}</p>
+                </>
+              ) : r.first_pass_observation ? (
                 <p className="mt-2 text-sm leading-6 text-ink-2">The first pass read: {r.first_pass_observation}</p>
               ) : (
                 <p className="mt-2 text-sm leading-6 text-ink-2">{r.second_look}</p>

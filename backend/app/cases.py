@@ -215,10 +215,19 @@ def _finish(g: Gemini, case: str, clip: Path, dur: float, claim: Claim, chk: Cla
                 s, e = max(0.0, mid - MIN_WINDOW / 2), min(dur, mid + MIN_WINDOW / 2)
             win = out / f"window_{claim.id}.mp4"
             video.cut(clip, win, s, e, height=480)
-            look = ck.second_look(g, win, claim, s, e, r.window_start_sec, r.window_end_sec, transcript)
+            nearby = pose.summarize([ev for ev in events if ev.start_sec <= e and ev.end_sec >= s])
+            look = ck.second_look(g, win, claim, s, e, r.window_start_sec, r.window_end_sec, transcript, nearby)
             r.second_look = look.observation
             log(f"  second look {claim.id} {s:.0f}-{e:.0f}s{' (disagreement)' if recheck else ''}: {look.finding}")
-            _settle(r, FINDING_STATUS[look.finding], look.observation, recheck)
+            if {r.status, FINDING_STATUS[look.finding]} == {"potential_inconsistency", "consistent"}:
+                # The two reviews contradict each other: neither wins by going last. A third look decides.
+                a, b = sorted((r.observation, look.observation))   # order doesn't reveal which came first
+                tie = ck.adjudicate(g, win, claim, s, e, a, b, transcript, nearby)
+                log(f"  third look {claim.id}: {tie.finding}")
+                r.adjudication = tie.observation
+                _settle(r, FINDING_STATUS[tie.finding], tie.observation, True)
+            else:
+                _settle(r, FINDING_STATUS[look.finding], look.observation, recheck)
 
     if r.window_start_sec is not None:
         s, e = r.window_start_sec, r.window_end_sec

@@ -28,7 +28,10 @@ def thinking(model: str) -> types.ThinkingConfig | None:
 
 class Gemini:
     def __init__(self):
-        self.client = genai.Client(vertexai=True, api_key=os.environ["GOOGLE_API_KEY"], http_options=types.HttpOptions(timeout=int(float(os.getenv("API_TIMEOUT_SEC", "60")) * 1000), retry_options=types.HttpRetryOptions(attempts=1)))
+        # Own timeout, longer than API_TIMEOUT_SEC: a claim check with high thinking on high-resolution video takes
+        # over 60 s (Vertex answers 504 DEADLINE_EXCEEDED at that limit). ANALYSIS_TIMEOUT_SEC still bounds the run.
+        timeout_ms = int(float(os.getenv("GEMINI_TIMEOUT_SEC", "300")) * 1000)
+        self.client = genai.Client(vertexai=True, api_key=os.environ["GOOGLE_API_KEY"], http_options=types.HttpOptions(timeout=timeout_ms, retry_options=types.HttpRetryOptions(attempts=1)))
 
     def close(self):
         self.client.close()
@@ -54,7 +57,7 @@ class Gemini:
             except errors.APIError as exc:
                 if attempt == 2 or exc.code not in (429, 500, 502, 503, 504):
                     raise
-                pause(2 ** (attempt + 1))
+                pause(15 * (attempt + 1) if exc.code == 429 else 2 ** (attempt + 1))   # rate limits need longer
 
             except (httpx.TimeoutException, httpx.TransportError):
                 check()

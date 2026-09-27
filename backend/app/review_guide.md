@@ -61,7 +61,9 @@ the footage can't settle it.
   on the right side of the image. When the officer calls "left" or "right", compare it with the hand the person
   uses from their own point of view.
 - The officer wearing the camera is never in view; their hands in front of the lens and their own voice are the
-  evidence for what they did, e.g. a demonstration. The reporting officer ("I") is often, but not always, the one
+  evidence for what they did, e.g. a demonstration. Anything they do to their own face or body (touching their
+  nose during a demonstration) can't be seen, so it is never grounds for potential_inconsistency or
+  incompatible_with_claim; at most the footage can't tell. The reporting officer ("I") is often, but not always, the one
   wearing the camera: the transcript's speaker roles say which voice is the camera wearer. If the report's "I" is
   another officer, judge that officer's actions from where they appear in the video.
 - The camera moves with the officer's body. Apparent sway, drift or zoom of the whole scene is camera movement,

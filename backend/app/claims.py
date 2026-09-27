@@ -71,6 +71,31 @@ finding (about the claim, not about any earlier check):
 observation: one or two neutral sentences citing video seconds.
 
 {transcript}
+
+Automated pose events in this clip (video seconds; noisy; left/right are the person's own, measured from their
+body, so they don't depend on which side of the image the person is on). Confirm them in the video:
+{pose}
+"""
+
+ADJUDICATE_PROMPT = """This clip is seconds {start:.1f}-{end:.1f} of a body-worn camera video, without overlays: clip second 0
+is video second {start:.1f}. Give every time as a video second (clip second + {start:.1f}).
+It bears on this claim from a team-written police report:
+"{text}"
+Two independent reviews of this footage contradict each other about it:
+- Review A: {a}
+- Review B: {b}
+At most one of them is right. Watch the moments they describe and decide what the footage shows. Check each
+specific detail they disagree on (which hand, which moment, whether the action happens) frame by frame. Left and
+right are the person's own; a person facing the camera uses their left hand on the right side of the image. The
+transcript and the pose events below are independent evidence; use them to check the reviews.
+finding: incompatible_with_claim, matches_claim or cannot_tell, with the same meaning as always: a finding other
+than cannot_tell needs the relevant action in clear view (or clearly audible).
+observation: one or two neutral sentences citing video seconds, stating what the footage shows.
+
+{transcript}
+
+Automated pose events in this clip (video seconds; noisy; left/right are the person's own):
+{pose}
 """
 
 
@@ -129,10 +154,21 @@ def check(gemini: Gemini, video: Path, claims: list[Claim], pose_text: str, dura
 
 
 def second_look(gemini: Gemini, window: Path, claim: Claim, start: float, end: float,
-                claim_start: float, claim_end: float, transcript: Transcript | None) -> SecondLook:
+                claim_start: float, claim_end: float, transcript: Transcript | None,
+                pose_text: str = "(no pose events)") -> SecondLook:
     """claim_start/claim_end: the first pass's window, in original-video seconds."""
     ensure_model_size(window)
-    prompt = SECOND_LOOK_PROMPT.format(start=start, end=end, c0=claim_start, c1=claim_end,
-                                       text=claim.text, transcript=transcript_text(transcript, start, end))
+    prompt = SECOND_LOOK_PROMPT.format(start=start, end=end, c0=claim_start, c1=claim_end, text=claim.text,
+                                       transcript=transcript_text(transcript, start, end), pose=pose_text)
+    return gemini.generate([video_part(window, SECOND_LOOK_FPS), prompt], SecondLook, model=CLAIMS_MODEL,
+                           system=GUIDE)
+
+
+def adjudicate(gemini: Gemini, window: Path, claim: Claim, start: float, end: float, a: str, b: str,
+               transcript: Transcript | None, pose_text: str = "(no pose events)") -> SecondLook:
+    """Third look when the first two reviews contradict each other. It isn't told which review came first."""
+    ensure_model_size(window)
+    prompt = ADJUDICATE_PROMPT.format(start=start, end=end, text=claim.text, a=a, b=b,
+                                      transcript=transcript_text(transcript, start, end), pose=pose_text)
     return gemini.generate([video_part(window, SECOND_LOOK_FPS), prompt], SecondLook, model=CLAIMS_MODEL,
                            system=GUIDE)

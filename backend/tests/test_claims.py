@@ -82,10 +82,12 @@ def check(cid, status, s=10.0, e=20.0):
 @patch("backend.app.cases.video.frame")
 @patch("backend.app.cases.video.cut")
 class GateTests(unittest.TestCase):
-    def finish(self, c, chk, confirmed=True, finding=None, recheck=False):
+    def finish(self, c, chk, confirmed=True, finding=None, recheck=False, third="cannot_tell"):
         finding = finding or ("incompatible_with_claim" if confirmed else "cannot_tell")
         with patch("backend.app.cases.ck.second_look",
-                   return_value=SecondLook(observation="look", finding=finding)) as look:
+                   return_value=SecondLook(observation="look", finding=finding)) as look, \
+             patch("backend.app.cases.ck.adjudicate",
+                   return_value=SecondLook(observation="third", finding=third)) as self.third:
             r = cases._finish(None, "t", Path("clip.mp4"), 60.0, c, chk, [], None, log=lambda *_: None,
                               recheck=recheck)
         return r, look
@@ -97,8 +99,21 @@ class GateTests(unittest.TestCase):
         self.assertEqual((r.status, r.downgraded), ("insufficient_footage", True))
         # The shown observation is the re-check's reason, never the overruled flag's.
         self.assertEqual((r.observation, r.first_pass_observation), ("look", "obs"))
-        r, _ = self.finish(claim("c1"), check("c1", "potential_inconsistency"), finding="matches_claim")
-        self.assertEqual((r.status, r.downgraded, r.observation), ("consistent", True, "look"))
+        self.third.assert_not_called()
+
+    def test_contradicting_reviews_go_to_a_third_look_that_decides(self, *_):
+        # First pass: flag (the footage shows otherwise). Re-check: the footage matches the claim. Neither wins by
+        # going last; the third look decides, and its text is what's shown.
+        flag = check("c1", "potential_inconsistency")
+        r, _ = self.finish(claim("c1"), flag, finding="matches_claim", third="incompatible_with_claim")
+        self.assertEqual((r.status, r.downgraded, r.observation, r.adjudication),
+                         ("potential_inconsistency", False, "third", "third"))
+        self.assertEqual((r.second_look, r.first_pass_observation), ("look", "obs"))
+        self.assertEqual(sorted(self.third.call_args.args[5:7]), ["look", "obs"])   # both reviews, unlabeled
+        r, _ = self.finish(claim("c1"), flag, finding="matches_claim", third="matches_claim")
+        self.assertEqual((r.status, r.downgraded), ("consistent", True))
+        r, _ = self.finish(claim("c1"), flag, finding="matches_claim", third="cannot_tell")
+        self.assertEqual(r.status, "insufficient_footage")
 
     def test_disagreeing_observation_is_rechecked_and_replaced(self, *_):
         # e.g. "his feet are apart" next to insufficient_footage: the re-check's finding decides, with its own text.
