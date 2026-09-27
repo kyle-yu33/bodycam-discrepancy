@@ -25,6 +25,8 @@ from . import pose, video  # noqa: E402
 from .gemini import Gemini  # noqa: E402
 from .ledger import CaseResult, Claim, ClaimCheck, ClaimResult, PoseEvent
 from .transcribe import transcribe
+from .storage import read, save
+from .runtime import check, Cancelled
 
 DATA = Path(os.getenv("DATA_DIR", Path(__file__).resolve().parents[2] / "data"))
 CASES = DATA / "cases"
@@ -37,21 +39,30 @@ def _media(case: str, name: str) -> str:
     return f"{MEDIA}/{case}/{name}"
 
 
-def prepare(case: str, src: Path, repose: bool = False, on_pose=None) -> tuple[Path, float, list[PoseEvent]]:
+def prepare(case: str, src: Path, repose: bool = False, on_pose=None, progress=None) -> tuple[Path, float, list[PoseEvent]]:
+    step = progress or (lambda *_: None)
     out = CASES / case
     out.mkdir(parents=True, exist_ok=True)
     clip = out / "clip.mp4"
     if repose or not clip.exists():
-        video.normalize(src, clip)
+        step("Normalizing footage", 0.02)
+        video.normalize(src, clip, on_progress=lambda f: step("Normalizing footage", 0.02 + .08 * f))
     pose_json = out / "pose.json"
     if repose or not pose_json.exists():
-        events, raw = pose.analyze(clip, out, on_frame=on_pose)
-        video.mux_audio(raw, clip, out / "annotated.mp4")
+        def pose_frame(f):
+            step("Tracking body pose", .12 + .23 * f)
+            if on_pose:
+                on_pose(f)
+        events, raw = pose.analyze(clip, out, on_frame=pose_frame,
+                                   on_stage=lambda stage: step(stage, .1 if stage == "Loading pose model" else .12))
+        step("Encoding pose overlay", .35)
+        video.mux_audio(raw, clip, out / "annotated.mp4",
+                        on_progress=lambda f: step("Encoding pose overlay", .35 + .04 * f))
         raw.unlink(missing_ok=True)
-        pose_json.write_text(json.dumps([e.model_dump() for e in events], indent=2), encoding="utf-8")
+        save(pose_json, [e.model_dump() for e in events])
         for stale in out.glob("model_*.mp4"):
             stale.unlink()
-    events = [PoseEvent(**e) for e in json.loads(pose_json.read_text(encoding="utf-8"))]
+    events = [PoseEvent(**e) for e in read(pose_json)]
     return clip, video.duration(clip), events
 
 
@@ -65,22 +76,23 @@ def _transcript(clip: Path, out: Path, log) -> None:
         return
     try:
         t = transcribe(clip)
+    except Cancelled:
+        raise
     except Exception as e:  # never block the claim ledger on the transcript
         log(f"  transcript failed: {e}")
         return
-    path.write_text(t.model_dump_json(indent=2), encoding="utf-8")
+    save(path, t)
     log(f"  transcript: {len(t.segments)} lines -> {path.name}")
 
 
 def _claims(g: Gemini, out: Path, report_text: str, reextract: bool) -> list[Claim]:
     path = out / "claims.json"
     if not reextract and path.exists():
-        saved = json.loads(path.read_text(encoding="utf-8"))
+        saved = read(path)
         if saved["report_text"] == report_text:
             return [Claim(**c) for c in saved["claims"]]
     claims = ck.extract(g, report_text)
-    path.write_text(json.dumps({"report_text": report_text, "claims": [c.model_dump() for c in claims]}, indent=2),
-                    encoding="utf-8")
+    save(path, {"report_text": report_text, "claims": [c.model_dump() for c in claims]})
     return claims
 
 
@@ -133,19 +145,22 @@ def _finish(g: Gemini, case: str, clip: Path, dur: float, claim: Claim, chk: Cla
 
 
 def run(case: str, src: Path, report_text: str, repose: bool = False, reextract: bool = False, log=print,
-        progress=None, origin: str = "demo") -> CaseResult:
+        progress=None, origin: str = "demo", publish: bool = True) -> CaseResult:
     """progress(stage, fraction) is called as each step starts and after every pose frame; the upload API shows it
     to the user, and may raise to stop the run."""
-    step = progress or (lambda stage, fraction: None)
+    def step(stage, fraction):
+        check()
+        if progress:
+            progress(stage, fraction)
     out = CASES / case
     log(f"[{case}] preparing clip and pose")
-    step("Preparing footage and tracking body pose", 0.05)
-    clip, dur, events = prepare(case, src, repose,
-                                on_pose=lambda f: step("Preparing footage and tracking body pose", 0.05 + 0.33 * f))
+    step("Preparing footage", 0.01)
+    clip, dur, events = prepare(case, src, repose, progress=step)
     if repose:
         (out / "transcript.json").unlink(missing_ok=True)
     step("Transcribing audio", 0.4)
     _transcript(clip, out, log)
+    step("Encoding footage for analysis", 0.45)
     overlay = os.getenv("GEMINI_VIDEO", "annotated") == "annotated"
     model_video = out / f"model_{'annotated' if overlay else 'clean'}.mp4"
     if not model_video.exists():
@@ -169,10 +184,12 @@ def run(case: str, src: Path, report_text: str, repose: bool = False, reextract:
     res = CaseResult(case=case, origin=origin, model=ck.CLAIMS_MODEL, created_at=datetime.now(timezone.utc).isoformat(),
                      report_text=report_text, duration_sec=dur, video_url=_media(case, "clip.mp4"),
                      annotated_video_url=_media(case, "annotated.mp4"), results=results, pose_events=events)
-    (out / "result.json").write_text(res.model_dump_json(indent=2), encoding="utf-8")
-    runs = out / "runs"
-    runs.mkdir(exist_ok=True)
-    (runs / f"{datetime.now():%Y%m%d-%H%M%S}_{ck.CLAIMS_MODEL}.json").write_text(res.model_dump_json(indent=2), encoding="utf-8")
+    step("Saving results", 0.99)
+    if publish:
+        save(out / "result.json", res)
+        runs = out / "runs"
+        runs.mkdir(exist_ok=True)
+        save(runs / f"{datetime.now():%Y%m%d-%H%M%S}.json", res)
     return res
 
 

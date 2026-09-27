@@ -20,7 +20,7 @@ REPORT = "FICTIONAL REPORT.\n\nSUBJECT A raised both arms."
 
 
 def fake_run(cases_dir: Path, fail_on: str | None = None):
-    def run(case, src, report_text, log=print, progress=None, origin="demo"):
+    def run(case, src, report_text, log=print, progress=None, origin="demo", publish=True):
         if case == "slow":  # long pose step: reports progress until stopped (or 5 s)
             for i in range(500):
                 progress("Preparing footage and tracking body pose", 0.05 + i / 2000)
@@ -31,7 +31,8 @@ def fake_run(cases_dir: Path, fail_on: str | None = None):
         res = CaseResult(case=case, origin=origin, model="test", created_at=datetime.now(timezone.utc).isoformat(),
                          report_text=report_text, duration_sec=5, video_url=f"/case-media/{case}/clip.mp4",
                          annotated_video_url=f"/case-media/{case}/annotated.mp4", results=[], pose_events=[])
-        (cases_dir / case / "result.json").write_text(res.model_dump_json(), encoding="utf-8")
+        if publish:
+            main.save(cases_dir / case / "result.json", res)
         return res
     return run
 
@@ -125,7 +126,7 @@ class CaseUploadTests(unittest.TestCase):
             job = wait(client, "boom")
             self.assertEqual(job["status"], "failed")
             self.assertIn("model unavailable", job["error"])
-            self.assertEqual(client.get("/cases/boom").status_code, 404)
+            self.assertEqual(client.get("/cases/boom").status_code, 409)
             self.assertEqual(self.post(client, name="boom").status_code, 202)
 
     def test_queue_lists_active_jobs_oldest_first(self):

@@ -146,7 +146,7 @@ export function EvidenceViewer({ results, duration, selected, revealed, overlay,
             <div className="mr-1.5 flex rounded-md bg-white/6 p-0.5 text-xs ring-1 ring-white/10" role="tablist" aria-label="Video layer">
               {[false, true].map((o) => (
                 <button key={String(o)} role="tab" aria-selected={overlay === o} onClick={() => setOverlay(o)}
-                  className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-[5px] px-2.5 py-1 transition-colors ${overlay === o ? "bg-ink text-stage" : "text-white/70 hover:text-white"}`}>
+                  className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-[5px] px-2.5 py-1 transition-colors ${overlay === o ? "bg-ink text-stage" : "text-white/70 hover:bg-white/10 hover:text-white"}`}>
                   {o && <PersonIcon className="h-3.5 w-3.5" />}{o ? "Pose overlay" : "Original"}
                 </button>
               ))}

@@ -14,7 +14,7 @@ function Tabs({ view, setView, revealed, count }: { view: ReportView; setView: (
         const active = view === v || (!revealed && v === "report");
         return (
           <button key={v} role="tab" aria-selected={active} onClick={() => setView(v)} disabled={v === "claims" && !revealed}
-            className={`-mb-px flex items-center gap-2 whitespace-nowrap border-b-2 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${active ? "border-brass font-medium text-ink" : "border-transparent text-muted hover:text-ink"}`}>
+            className={`-mb-px flex items-center gap-2 whitespace-nowrap border-b-2 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${active ? "border-brass font-medium text-ink" : "border-transparent text-muted hover:border-brass/45 hover:text-ink"}`}>
             {v === "report" ? <><FileIcon className="h-4 w-4" /> Report</> : <>Claims {revealed && <span className="rounded-full bg-sunken px-1.5 text-[11px] tabular-nums text-muted">{count}</span>}</>}
           </button>
         );
@@ -91,7 +91,7 @@ export function ReportPanel({ report, results, revealed, selectedId, onSelect, f
               return (
                 <li key={r.claim.id}>
                   <button onClick={() => onSelect(r.claim.id)} aria-pressed={selected}
-                    className={`flex w-full gap-4 border-l-2 px-6 py-4 text-left transition-colors ${selected ? "border-brass bg-brand-soft" : "border-transparent hover:bg-sunken/70"}`}>
+                    className={`flex w-full gap-4 border-l-2 px-6 py-4 text-left transition-colors ${selected ? "border-brass bg-brand-soft" : "border-transparent hover:bg-hairline"}`}>
                     <span className="w-6 shrink-0 pt-0.5 font-serif text-[15px] tabular-nums text-muted">{String(i + 1).padStart(2, "0")}</span>
                     <span className="min-w-0 flex-1">
                       <span className="block font-serif text-[16px] leading-6 text-ink">{r.claim.text}</span>

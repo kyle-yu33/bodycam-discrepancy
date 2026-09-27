@@ -22,14 +22,14 @@ function videoDuration(file: File): Promise<number> {
 
 // Every upload the backend is running or holding, so a waiting job can see what is ahead of it.
 function AnalysisQueue({ mine, onStopMine }: { mine?: string; onStopMine: () => void }) {
-  const { active, finished, dismiss, stop, stopping, stopError } = useCaseJobs();
+  const { active, finished, dismiss, stop, remove, stopping, stopError } = useCaseJobs();
   const others = finished.filter((j) => j.id !== mine);
-  if (!active.length && !others.length) return null;
+  if (!active.length && !others.length && !stopError) return null;
   return (
     <section className="mt-6 rounded-xl border border-hairline bg-surface p-5" aria-live="polite">
       <h2 className="text-sm font-semibold">Analysis queue</h2>
       <p className="mb-3 mt-0.5 text-xs text-muted">Cases run one at a time, in upload order.</p>
-      <QueueList active={active} finished={others} mine={mine} onDismiss={dismiss} stopping={stopping}
+      <QueueList active={active} finished={others} mine={mine} onDismiss={dismiss} onDelete={remove} stopping={stopping}
         onStop={(id) => (id === mine ? onStopMine() : stop(id))} />
       {stopError && <p className="mt-3 text-xs text-review" role="alert">{stopError}</p>}
     </section>
@@ -48,6 +48,8 @@ export default function NewCase() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [uploadPercent, setUploadPercent] = useState(0);
+  const [stoppingMine, setStoppingMine] = useState(false);
   const [job, setJob] = useState<CaseJob | null>(null);
   const [started, setStarted] = useState(0);
   const [now, setNow] = useState(0);
@@ -57,22 +59,41 @@ export default function NewCase() {
     getHealth().then(setHealth).catch((e: Error) => setHealthError(e.message));
   }, []);
 
-  // Poll the background job; open the review workspace when it's done.
+  // Wait for each response before scheduling another poll; discard stale responses.
+  const jobId = job?.id;
+  const runId = job?.run_id;
+  const isActive = job?.status === "queued" || job?.status === "processing";
+  const cancelRequested = !!job?.cancellation_requested;
   useEffect(() => {
-    if (!job || job.status === "complete" || job.status === "failed") return;
-    const id = job.id;
-    const timer = window.setInterval(async () => {
-      setNow(Date.now());
+    if (!jobId || !isActive) return;
+    let alive = true;
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
       try {
-        const next = await getCaseJob(id);
+        const next = await getCaseJob(jobId);
+        if (!alive) return;
+        if (next.run_id !== runId) {
+          setJob(null);
+          setNotice("This case has been replaced by a newer upload. Check the queue.");
+          return;
+        }
         setJob(next);
-        if (next.status === "complete") router.push(`/cases/${encodeURIComponent(id)}?instant=1`);
+        setError("");
+        if (next.status === "complete") router.push(`/cases/${encodeURIComponent(jobId)}?instant=1`);
       } catch (e) {
-        setError((e as Error).message);
+        if (!alive) return;
+        if ((e as Error & { status?: number }).status === 404) {
+          setJob(null);
+          setStoppingMine(false);
+          setNotice(cancelRequested ? `Stopped ${jobId}. Its files have been deleted.` : "This case was deleted.");
+        } else setError(`Status update failed: ${(e as Error).message}`);
+      } finally {
+        if (alive) { setNow(Date.now()); timer = setTimeout(poll, POLL_MS); }
       }
-    }, POLL_MS);
-    return () => window.clearInterval(timer);
-  }, [job, router]);
+    };
+    timer = setTimeout(poll, POLL_MS);
+    return () => { alive = false; clearTimeout(timer); };
+  }, [jobId, runId, isActive, cancelRequested, router]);
 
   async function pickVideo(file: File | null) {
     setVideo(file);
@@ -92,12 +113,14 @@ export default function NewCase() {
     setError("");
     setNotice("");
     setSubmitting(true);
+    setUploadPercent(0);
+    setStoppingMine(false);
     const form = new FormData();
     form.append("video", video);
     form.append("report_text", report);
     form.append("name", name);
     try {
-      const created = await createCase(form);
+      const created = await createCase(form, setUploadPercent);
       setStarted(Date.now());
       setNow(Date.now());
       setJob(created);
@@ -110,14 +133,20 @@ export default function NewCase() {
 
   // Keeps the form filled in, so the same clip and report can be resubmitted.
   async function stopMine() {
-    if (!job || !window.confirm(`Stop analyzing ${job.id}? The upload is deleted; submit again to retry.`)) return;
+    if (!job || !window.confirm(`Stop analyzing ${job.id} and delete its files?`)) return;
+    setStoppingMine(true);
     try {
-      await stopCase(job.id);
-      setJob(null);
+      const stopped = await stopCase(job.id, job.run_id);
       setError("");
-      setNotice(`Stopped ${job.id}. Your clip and report are still filled in below.`);
+      if (stopped.status === "processing") setJob(stopped);
+      else {
+        setJob(null);
+        setStoppingMine(false);
+        setNotice(`Stopped ${job.id}. Its files have been deleted.`);
+      }
     } catch (e) {
       setError((e as Error).message);
+      setStoppingMine(false);
     }
   }
 
@@ -166,11 +195,14 @@ export default function NewCase() {
               <div className="h-full rounded-full bg-brand transition-all duration-700" style={{ width: `${Math.round(job.progress * 100)}%` }} />
             </div>
             <p className="mt-3 text-xs text-muted">
-              {elapsed} s elapsed · usually 2 to 5 minutes. You can leave this page; the case appears in the case list when it&apos;s done.
+              {elapsed} s elapsed · Estimated progress; some steps may take several minutes. You can leave this page; the case appears in the case list when it&apos;s done.
             </p>
+            {error && <p className="mt-2 text-xs text-review" role="alert">{error}</p>}
+            {running && job.updated_at && now - Date.parse(job.updated_at) > 30000 && <p className="mt-2 text-xs text-muted">This step has not advanced for {Math.floor((now - Date.parse(job.updated_at)) / 1000)} seconds. Model startup and processing can take longer on the first run.</p>}
+            {running && job.heartbeat_at && <p className="mt-2 text-xs text-muted">{now - Date.parse(job.heartbeat_at) > 15000 ? "Worker heartbeat delayed. Checking for an update…" : "Worker active"}</p>}
             {running && (
-              <button onClick={stopMine} className="mt-4 rounded-lg border border-hairline px-3 py-1.5 text-sm text-review hover:bg-review-bg">
-                Stop analysis
+              <button onClick={stopMine} disabled={stoppingMine || job.cancellation_requested} className="mt-4 rounded-lg border border-hairline px-3 py-1.5 text-sm text-review hover:bg-review-bg">
+                {stoppingMine || job.cancellation_requested ? "Stopping after the current operation…" : "Stop analysis"}
               </button>
             )}
           </section>
@@ -181,7 +213,7 @@ export default function NewCase() {
               <span className="block text-xs text-muted">MP4 or MOV with its original audio, {MAX_CLIP_SEC} seconds or less.</span>
               <input type="file" accept=".mp4,.mov,video/mp4,video/quicktime" required
                 onChange={(e) => pickVideo(e.target.files?.[0] ?? null)}
-                className="mt-2 block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-sunken file:px-3 file:py-2 file:text-sm" />
+                className="mt-2 block w-full cursor-pointer text-sm file:mr-3 file:rounded-lg file:border file:border-transparent file:bg-sunken file:px-3 file:py-2 file:text-sm file:text-ink-2 file:transition-[background-color,border-color,color,transform] file:duration-200 hover:file:scale-[1.03] hover:file:border-brass/50 hover:file:bg-hairline hover:file:text-ink motion-reduce:hover:file:scale-100" />
               {tooLong && (
                 <span className="mt-1 block text-xs text-review">
                   This clip is {Math.round(duration!)} s long. Trim it to {MAX_CLIP_SEC} s or less first.
@@ -192,7 +224,8 @@ export default function NewCase() {
             <div>
               <div className="flex items-baseline justify-between gap-3">
                 <label htmlFor="report" className="text-sm font-medium">Report</label>
-                <button type="button" onClick={() => reportInput.current?.click()} className="text-xs text-brand underline">
+                <button type="button" onClick={() => reportInput.current?.click()}
+                  className="rounded-md px-2 py-1 text-xs text-brand underline decoration-brand/40 underline-offset-2 transition-[background-color,color,text-decoration-color,transform] duration-200 hover:scale-[1.03] hover:bg-hairline hover:text-ink hover:decoration-ink motion-reduce:hover:scale-100">
                   {reportFile ? `Attached ${reportFile} · replace` : "Attach .txt instead"}
                 </button>
                 <input ref={reportInput} type="file" accept=".txt,text/plain" hidden
@@ -218,6 +251,7 @@ export default function NewCase() {
             {notice && <p className="rounded-lg bg-sunken p-3 text-sm" role="status">{notice}</p>}
             {error && <p className="rounded-lg bg-review-bg p-3 text-sm text-review" role="alert">{error}</p>}
 
+            {submitting && <progress className="w-full" value={uploadPercent} max={100} aria-label="Upload progress" />}
             <div className="flex items-center gap-3">
               <button type="submit" disabled={!canSubmit}
                 className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white shadow-sm hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60">

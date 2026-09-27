@@ -1,4 +1,5 @@
 """Video event contracts. All timestamps are seconds in the original recording."""
+import uuid
 from typing import Literal
 from pydantic import BaseModel, Field, model_validator
 
@@ -61,3 +62,8 @@ class Job(BaseModel):
     progress: float = 0
     error: str | None = None
     created_at: str
+    run_id: str = Field(default_factory=lambda: uuid.uuid4().hex)
+    updated_at: str | None = None
+    heartbeat_at: str | None = None
+    cancellation_requested: bool = False
+    progress_kind: Literal["estimate"] = "estimate"
