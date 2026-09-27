@@ -23,7 +23,7 @@ from .pipeline import run
 from . import cases as claim_cases
 from . import video as ffmpeg
 from .cases import CASES
-from .ledger import CaseResult
+from .ledger import CaseResult, FindingSummary
 from .storage import LOCK, read, save
 from .runtime import Cancelled, Control, current
 from .uploads import UploadLimit
@@ -36,6 +36,7 @@ CASE_ID = re.compile(r"[a-z0-9_-]+")
 MAX_REPORT_BYTES = 200_000
 ACTIVE = ("queued", "processing")
 log = logging.getLogger("uvicorn.error")
+SUMMARY_LOCKS: dict[str, threading.Lock] = {}
 
 
 def now():
@@ -387,6 +388,33 @@ def list_cases():
 @app.get("/cases/{case}", response_model=CaseResult)
 def get_case(case: str):
     return case_result(case)
+
+
+@app.get("/cases/{case}/summary", response_model=FindingSummary)
+def get_case_summary(case: str):
+    """Generate and cache a short narrative for cases analyzed before summaries existed."""
+    result = case_result(case)
+    if result.summary:
+        return FindingSummary(text=result.summary)
+    with LOCK:
+        summary_lock = SUMMARY_LOCKS.setdefault(case, threading.Lock())
+    with summary_lock:
+        result = case_result(case)  # another request may already have cached it
+        if result.summary:
+            return FindingSummary(text=result.summary)
+        try:
+            text = claim_cases.summarize_result(result)
+        except Exception:
+            log.exception("Could not summarize case %s", case)
+            return FindingSummary(text=claim_cases.fallback_summary(result.results))
+        with LOCK:
+            path = CASES / case / "result.json"
+            if path.exists():
+                current_result = CaseResult.model_validate(read(path))
+                if current_result.created_at == result.created_at and not current_result.summary:
+                    current_result.summary = text
+                    save(path, current_result)
+    return FindingSummary(text=text)
 
 
 def new_case_id(name):

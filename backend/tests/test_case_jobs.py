@@ -86,6 +86,18 @@ class CaseUploadTests(unittest.TestCase):
             self.assertEqual(listed["my-clip"]["origin"], "upload")
             self.assertEqual(client.get("/cases/my-clip").json()["origin"], "upload")
 
+    def test_existing_case_summary_is_generated_once_and_cached(self):
+        with TestClient(main.app) as client:
+            self.assertEqual(self.post(client, name="older-case").status_code, 202)
+            self.assertEqual(wait(client, "older-case")["status"], "complete")
+            with patch.object(main.claim_cases, "summarize_result", return_value="The recording provides a view of the encounter. Some details need closer human review.") as summarize:
+                first = client.get("/cases/older-case/summary")
+                second = client.get("/cases/older-case/summary")
+            self.assertEqual(first.status_code, 200)
+            self.assertEqual(second.json(), first.json())
+            self.assertEqual(summarize.call_count, 1)
+            self.assertEqual(client.get("/cases/older-case").json()["summary"], first.json()["text"])
+
     def test_generated_id_and_report_file(self):
         with TestClient(main.app) as client:
             r = self.post(client, report_text="", report=("report.txt", REPORT.encode("utf-8-sig")))

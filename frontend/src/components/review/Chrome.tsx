@@ -1,10 +1,8 @@
 "use client";
-import Link from "next/link";
-import type { CaseSummary, Origin, Status } from "@/lib/ledger";
+import type { Status } from "@/lib/ledger";
 import { STATUS, STATUS_ORDER, caseMeta } from "@/lib/present";
-import { CaseTabs } from "./CaseTabs";
+import { AppHeader } from "@/components/AppHeader";
 import { CheckIcon, CloseIcon, HelpIcon, ShieldCheck } from "./Icons";
-import { QueueMenu } from "./Queue";
 
 export type Phase = "loading" | "ready" | "analyzing" | "loaded" | "failed";
 
@@ -18,50 +16,8 @@ export function StatusBadge({ status, size = "sm" }: { status: Status; size?: "s
   );
 }
 
-function Logo() {
-  return (
-    <svg viewBox="0 0 32 32" className="h-7 w-7" aria-hidden>
-      <rect width="32" height="32" rx="7" className="fill-brand" />
-      <rect x="0.5" y="0.5" width="31" height="31" rx="6.5" fill="none" stroke="rgb(201 164 92 / 0.45)" />
-      <circle cx="14.5" cy="14.5" r="6" fill="none" stroke="#f2ebe3" strokeWidth="2.2" />
-      <path d="M19 19l5.5 5.5" stroke="#f2ebe3" strokeWidth="2.2" strokeLinecap="round" />
-      <path d="M11.8 14.5h5.4" className="stroke-brass" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-export function TopBar({ caseId, cases, phase, origin, provenance, onAnalyze, onHow, onCaseReady }: {
-  caseId: string; cases: CaseSummary[]; phase: Phase; origin: Origin; provenance: string; onAnalyze: () => void; onHow: () => void;
-  onCaseReady: () => void;
-}) {
-  const uploaded = origin === "upload";
-  return (
-    <header className="relative z-40 flex h-14 shrink-0 items-center gap-4 overflow-visible border-b border-hairline bg-canvas/70 px-4 backdrop-blur-md sm:gap-6 sm:px-6">
-      <Link href="/" className="flex shrink-0 items-center gap-2.5 rounded-md px-1 py-0.5 transition-colors hover:bg-hairline">
-        <Logo />
-        <span className="font-serif text-[21px] font-semibold tracking-tight text-ink">EvidenceLens</span>
-      </Link>
-
-      <CaseTabs caseId={caseId} cases={cases} />
-
-      <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
-        <span className="hidden text-xs text-muted xl:inline" aria-live="polite">{provenance}</span>
-        <button onClick={onHow} aria-label="How it works" className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 text-sm text-ink-2 transition-colors hover:bg-hairline hover:text-ink">
-          <HelpIcon className="h-4 w-4" /> <span className="hidden lg:inline">How it works</span>
-        </button>
-        <QueueMenu onComplete={onCaseReady} />
-        <Link href="/new" className="inline-flex h-9 items-center whitespace-nowrap rounded-md border border-hairline px-3 text-sm text-ink-2 transition-colors hover:border-brass/50 hover:bg-hairline hover:text-ink">
-          New case
-        </Link>
-        {!uploaded && (
-          <button onClick={onAnalyze} disabled={phase === "analyzing" || phase === "loading"}
-            className="inline-flex h-9 items-center whitespace-nowrap rounded-md bg-brand px-4 text-sm font-medium text-white shadow-sm transition hover:bg-brand-hi disabled:cursor-wait disabled:opacity-60">
-            {phase === "analyzing" ? "Analyzing…" : phase === "loaded" ? "Re-run analysis" : "Analyze case"}
-          </button>
-        )}
-      </div>
-    </header>
-  );
+export function TopBar({ caseId, onHow }: { caseId: string; onHow: () => void }) {
+  return <AppHeader title={caseMeta(caseId).title}><button onClick={onHow} aria-label="How it works" className="rounded-lg p-2 text-muted hover:bg-hairline"><HelpIcon className="h-4 w-4" /></button></AppHeader>;
 }
 
 /** One slim line: serif matter title and details, then the findings summary (which doubles as the status filter). */

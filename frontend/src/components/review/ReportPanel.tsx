@@ -10,12 +10,12 @@ export type ReportView = "report" | "claims";
 function Tabs({ view, setView, revealed, count }: { view: ReportView; setView: (v: ReportView) => void; revealed: boolean; count: number }) {
   return (
     <div className="flex h-12 shrink-0 items-stretch gap-6 border-b border-hairline px-6" role="tablist" aria-label="Report view">
-      {(["report", "claims"] as const).map((v) => {
+      {(["claims", "report"] as const).map((v) => {
         const active = view === v || (!revealed && v === "report");
         return (
           <button key={v} role="tab" aria-selected={active} onClick={() => setView(v)} disabled={v === "claims" && !revealed}
             className={`-mb-px flex items-center gap-2 whitespace-nowrap border-b-2 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${active ? "border-brass font-medium text-ink" : "border-transparent text-muted hover:border-brass/45 hover:text-ink"}`}>
-            {v === "report" ? <><FileIcon className="h-4 w-4" /> Report</> : <>Claims {revealed && <span className="rounded-full bg-sunken px-1.5 text-[11px] tabular-nums text-muted">{count}</span>}</>}
+            {v === "report" ? <><FileIcon className="h-4 w-4" /> Report</> : <>Findings {revealed && <span className="rounded-full bg-sunken px-1.5 text-[11px] tabular-nums text-muted">{count}</span>}</>}
           </button>
         );
       })}
@@ -23,8 +23,8 @@ function Tabs({ view, setView, revealed, count }: { view: ReportView; setView: (
   );
 }
 
-export function ReportPanel({ report, results, revealed, selectedId, onSelect, filter, view, setView }: {
-  report: ParsedReport; results: ClaimResult[]; revealed: boolean; selectedId: string | null;
+export function ReportPanel({ report, results, summary, revealed, selectedId, onSelect, filter, view, setView }: {
+  report: ParsedReport; results: ClaimResult[]; summary: string | null; revealed: boolean; selectedId: string | null;
   onSelect: (id: string) => void; filter: Status | null; view: ReportView; setView: (v: ReportView) => void;
 }) {
   const segments = useMemo(() => segment(report.narrative, results), [report.narrative, results]);
@@ -35,6 +35,12 @@ export function ReportPanel({ report, results, revealed, selectedId, onSelect, f
       <Tabs view={view} setView={setView} revealed={revealed} count={results.length} />
 
       <div className="min-h-0 flex-1 overflow-y-auto">
+        {revealed && (
+          <section className="border-b border-hairline bg-sunken/45 px-6 py-4" aria-label="Findings summary">
+            <h2 className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted">Findings summary</h2>
+            <p className="mt-1 text-[13px] leading-6 text-ink-2">{summary ?? "Preparing overview…"}</p>
+          </section>
+        )}
         {!showClaims ? (
           <article className="@container px-7 pb-8 pt-5">
             {report.disclaimer && (

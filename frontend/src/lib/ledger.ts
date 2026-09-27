@@ -44,6 +44,7 @@ export interface CaseResult {
   model: string;
   created_at: string;
   report_text: string;
+  summary?: string | null;
   duration_sec: number;
   video_url: string;
   annotated_video_url: string;
@@ -89,6 +90,8 @@ async function get<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const listCases = () => get<CaseSummary[]>("/cases");
 export const getCase = (id: string) => get<CaseResult>(`/cases/${encodeURIComponent(id)}`);
+export const getCaseSummary = (id: string) => get<{ text: string }>(`/cases/${encodeURIComponent(id)}/summary`,
+  { signal: AbortSignal.timeout(120000) });
 export const getHealth = () => get<Health>("/health");
 // form fields: video (file) or youtube_url, report_text and/or report (.txt file), name (optional)
 export function createCase(form: FormData, onProgress: (percent: number) => void): Promise<CaseJob> {
