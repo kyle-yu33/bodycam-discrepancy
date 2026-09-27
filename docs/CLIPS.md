@@ -23,6 +23,13 @@ skipped; delete the file to re-download it.
 |---|---|---|---|
 | `sfst1` | [YouTube 4ThCZOa20wc](https://www.youtube.com/watch?v=4ThCZOa20wc) | 3:40–5:00 (80 s) | Walk-and-Turn field sobriety test: nine steps along a line, a slow turn, nine steps back. |
 | `sfst2` | [YouTube mXw1nvF3klk](https://www.youtube.com/watch?v=mXw1nvF3klk) | 15:20–16:20 (60 s) | Indoor sobriety tests in a police garage: eye check, head tilted back with eyes closed (balance), finger to nose. Real Axon bodycam footage, subject's face unblurred. |
+| `gunpoint` | [YouTube yOegqWf4pM4](https://www.youtube.com/watch?v=yOegqWf4pM4) | 0:48.4–1:10 (22 s) | Officer leaves the car and orders two men by a white SUV to the ground at gunpoint; the man in white walks forward, then lies down. Men ~50 m away. Starts at 48.4 s to skip a cut from another camera. |
+| `porch` | [YouTube LPFw5-sIImk](https://www.youtube.com/watch?v=LPFw5-sIImk) | 7:40–8:25 (45 s) | Night; a man seated on his porch is asked to identify himself, then taken to the ground. Camera dark and shaking after ~27 s; two words bleeped. |
+| `hospital` | [YouTube qKlP-zdpj48](https://www.youtube.com/watch?v=qKlP-zdpj48) | 4:13–5:00 (47 s) | Welfare check in a hospital lounge; the man talks to his father on speakerphone, then is arrested and taken down onto a table. |
+| `parkedcar` | [YouTube G19anoWa2LA](https://www.youtube.com/watch?v=G19anoWa2LA) | 1:30–3:05 (95 s) | Night; an officer at a parked car's window asks the couple inside to identify themselves; they decline. Over the 90 s guideline. |
+
+The last four are re-published by Audit the Audit, a commentary channel. The sections above have no narration,
+but check any new section from that channel for voice-over, captions and freeze-frames.
 
 ## Add a YouTube clip
 

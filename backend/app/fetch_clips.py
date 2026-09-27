@@ -15,6 +15,11 @@ DATA = Path(__file__).resolve().parents[2] / "data"
 CLIPS = {
     "sfst1": ("https://www.youtube.com/watch?v=4ThCZOa20wc", "3:40-5:00"),
     "sfst2": ("https://www.youtube.com/watch?v=mXw1nvF3klk", "15:20-16:20"),
+    # Re-published by Audit the Audit (commentary channel); check each clip for narration before using it.
+    "gunpoint": ("https://www.youtube.com/watch?v=yOegqWf4pM4", "48.4-70"),  # 48.0-48.3 is a cut from another camera
+    "porch": ("https://www.youtube.com/watch?v=LPFw5-sIImk", "7:40-8:25"),
+    "hospital": ("https://www.youtube.com/watch?v=qKlP-zdpj48", "4:13-5:00"),
+    "parkedcar": ("https://www.youtube.com/watch?v=G19anoWa2LA", "1:30-3:05"),
 }
 
 
