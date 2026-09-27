@@ -2,118 +2,158 @@
 
 **Hack the Hill III · Civic Tech · Team: Artem, Lucas, Ayan, Kyle**
 
-evidently turns a written incident narrative and bodycam-style footage into a claim-by-claim
-evidence map, helping defence-side legal teams find the moments that deserve close human review.
+**Live: [evidently.work](https://evidently.work)**
+
+evidently checks a written police report against body-worn camera footage, one claim at a time, and takes
+defence-side legal teams to the moments that deserve a closer look.
 
 > **No claim without a source. No source without a timestamp. No certainty when footage is unclear.**
 
-This is a hackathon prototype using publicly released bodycam footage and a team-written report. It surfaces source-linked review questions; it does not
-make legal conclusions. Human review is always required.
+This is a hackathon prototype. It surfaces source-linked review questions; it does not make legal conclusions,
+and human review is always required. Demo reports are fictional and written by the team; demo footage is
+publicly released body-worn camera video, credited on each case.
 
-## Project context
+## Try it
 
-The team's source of truth lives in [`context/`](context/README.md). Read
-[`context/main.md`](context/main.md) before changing scope, and `mvp.md`, `stack.md`, and
-`skeleton.md` before building. `safety.md` and `positioning.md` are guardrails for all UI copy
-and pitch claims. The build plan, workflow and status are in [`docs/PLAN.md`](docs/PLAN.md).
+| | |
+|---|---|
+| [evidently.work](https://evidently.work) | Landing page |
+| [evidently.work/cases/sfst2](https://evidently.work/cases/sfst2) | A finished demo case: report, footage and findings side by side |
+| [evidently.work/cases](https://evidently.work/cases) | All cases: demo examples and your uploads |
+| [evidently.work/new](https://evidently.work/new) | Upload a video (MP4/MOV or a YouTube link) and its report, then follow the analysis |
 
-## Quick start: analyze your own clip
+Only upload publicly released footage (`context/safety.md`). Uploads are sent to Gemini on Vertex AI for analysis,
+and their audio to ElevenLabs for a transcript when the server has that key.
 
-You only need the backend and the frontend running. Requirements: Python 3.11+, Node 20+, FFmpeg
-on `PATH`, and `GOOGLE_API_KEY` (Vertex AI) in `backend/.env`. `ELEVENLABS_API_KEY` is optional
-and adds a timed transcript.
+## What you get
 
-    cd backend
-    .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000
+Every sentence of the report's narrative becomes a claim, and every claim gets one of four statuses, with the time
+window and frames it relied on:
 
-    cd frontend
-    npm install
-    npm run dev                 # http://localhost:3000/new
+| Status | Meaning |
+|---|---|
+| **Potential inconsistency, review recommended** | The footage appears incompatible with the claim, and an independent re-check agreed. |
+| **Consistent** | The footage visibly or audibly matches the claim. |
+| **Insufficient footage** | The camera can't establish it: off-screen, dark, too far, too small. Not evidence it didn't happen. |
+| **Outside assessment** | An opinion, a sensation or a legal conclusion, which the tool deliberately doesn't judge. |
 
-On `/new`, choose an MP4/MOV clip (90 s or less), paste the report or attach a `.txt`, and click
-Analyze. The frontend sends `POST /cases`; the backend runs the analysis as a background job
-(about 2 to 5 minutes) while the page polls `GET /cases/{case}/job`, then opens the ledger.
-Uploads must be publicly released footage (`context/safety.md`).
+A false flag is the worst failure, so anything uncertain ends up as insufficient footage.
 
-## Claims pipeline (claim-evidence ledger)
+## How it works
 
-The demo cases (`sfst1`, `sfst2`, `gunpoint`, `porch`, `hospital`, `parkedcar`; see `docs/CLIPS.md`) are prepared from the command line and replayed from cache.
-From `backend/`, with `GOOGLE_API_KEY` in `backend/.env`:
+For each case (`backend/app/cases.py`):
 
-    python -m app.fetch_clips           # demo clips -> data/clips/
-    python -m app.cases sfst2           # report vs. footage -> data/cases/sfst2/result.json, then scored
-    python -m app.evaluate sfst2        # re-score the latest result against data/ground_truth/sfst2.json
+1. **Prepare the footage.** FFmpeg normalizes the clip.
+2. **Measure body pose.** YOLO11 pose estimation finds 17 keypoints per person at 10 fps, and ByteTrack follows
+   each person between frames. Movements (arm out, hand to face, head tilted, foot raised…) become timed events,
+   and an overlay video with a burned-in clock is made for the model (`pose.py`).
+3. **Transcribe the audio** with ElevenLabs Scribe: word timings and speakers (`transcribe.py`). Optional; skipped
+   without a key.
+4. **Split the report into claims**, typed visual, audio, documentary or opinion/legal (`claims.py`).
+5. **Check every claim** with Gemini 3.8 Flash, which watches the video and listens to its audio in one pass,
+   alongside the pose events and the transcript. Clips over 90 s are checked in 60 s windows.
+6. **Re-check.** A text pass flags any claim whose status doesn't fit its own observation. Every flag, and every
+   such claim, gets a second look at a clean, narrow clip at 5 fps that doesn't see the first answer, and that
+   look's finding sets the status. If one look says inconsistent and the other consistent, a third look decides.
+7. **Build the ledger:** status, time window, observation, re-check notes and evidence frames for every claim
+   (`ledger.py`).
 
-The API serves results at `GET /cases` and `GET /cases/{case}`, media under `/case-media/`.
-`POST /cases` and `GET /cases/{case}/job` run the same pipeline on an upload.
-Details and tuning knobs: [`docs/PLAN.md`](docs/PLAN.md).
+The review page (`frontend/`) shows the report with each sentence marked, the footage with the claim's window
+on the timeline and an optional pose overlay, and the findings.
 
-## Current state of the repo
+## Architecture
 
-The code in `backend/`, `frontend/` and `shared/` is the **original scaffold** (commit `d5f9d92`),
-built before the direction in `context/` was agreed. Where they disagree, **`context/` wins**;
-the scaffold is kept runnable until it is replaced.
-
-| Topic | Scaffold (current code) | Target (`context/`) |
+| Part | Where | Hosted at |
 |---|---|---|
-| Vision layer | Event API: Gemini only. Claims pipeline: Gemini + YOLO pose (`app/pose.py`) | Gemini + YOLO pose (offline Python preprocessing) as frame-level evidence for physical claims (`stack.md`) |
-| Backend | Python FastAPI on :8000 | Next.js route handler `POST /api/analyze` (`backend.md`) |
-| Result states | Event API: `retained` / `uncertain` / `dismissed`. Claims pipeline: the 4 approved states (`app/ledger.py`) | 4 approved states, amber for review, no "contradiction" (`frontend.md`) |
-| Claim types | Claims pipeline: `visual` / `audio` / `documentary` / `subjective_or_legal`. Event API: none | `visual` / `audio` / `documentary` / `subjective_or_legal` |
-| API key | Required (Vertex AI `GOOGLE_API_KEY`) | App must run without one; mock/cached analysis by default (`mvp.md`) |
-| Secrets file | `backend/.env` | `.env.local` (`backend.md`) |
+| Frontend: Next.js 16, React 19, Tailwind 4 | `frontend/` | `https://evidently.work` |
+| Backend: FastAPI, the analysis pipeline, a single-worker job queue | `backend/` | `https://api.evidently.work` |
+| Shared API types (frontend mirror of `backend/app/ledger.py`) | `shared/types.ts` | |
+| Team docs: scope, safety rules, positioning | `context/`, `docs/` | |
 
-Migrating means following the build order in [`context/skeleton.md`](context/skeleton.md), then
-logging the change in [`context/decisions.md`](context/decisions.md).
+Main API routes: `GET /cases`, `GET /cases/{case}`, `GET /cases/{case}/summary`, `POST /cases` (upload; starts a background job),
+`GET /cases/{case}/job`, `POST /cases/{case}/stop`, `DELETE /cases/{case}`, `GET /case-jobs`, `GET /health`,
+and media under `/case-media/`.
 
-## Legacy scaffold setup
+## Run it locally
 
-Gemini-only event discovery, matching the two-pass pipeline diagram. No reports or claim comparison.
+For development only; the live site needs none of this. Requirements: Python 3.11+, Node 20+, FFmpeg on PATH, and a
+Vertex AI key.
 
-### Backend (PowerShell)
-    cd backend
-    py -3.11 -m venv .venv
-    .\.venv\Scripts\Activate.ps1
-    pip install -r requirements-dev.txt
-    copy .env.example .env      # add GOOGLE_API_KEY (Vertex AI key, see context/backend.md)
-    python smoke_test.py        # one Vertex AI call; prints status + reply, never the key
-    uvicorn app.main:app --reload --port 8000                           # http://localhost:8000/docs
+```powershell
+# Backend (from backend/)
+py -3.11 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements-dev.txt
+copy .env.example .env                  # set GOOGLE_API_KEY (Vertex AI); ELEVENLABS_API_KEY is optional
+uvicorn app.main:app --reload --port 8000
 
-Tests (from the repo root): `python -m unittest backend/tests/test_pipeline.py -v`
+# Frontend (from frontend/)
+npm install
+npm run dev                             # http://localhost:3000
+```
 
-### Frontend
-    cd frontend
-    npm run dev                 # http://localhost:3000
+The frontend reads the API address from `NEXT_PUBLIC_API_URL` (default `http://localhost:8000`, see
+`frontend/.env.example`). The backend only accepts browser requests from `FRONTEND_ORIGIN` (default
+`http://localhost:3000`). The pose model loads from `POSE_MODEL` (default `backend/yolo11n-pose.pt`). Install the
+weights before the first analysis; they are not downloaded mid-run.
+
+### Demo cases and scoring
+
+The demo cases (`sfst1`, `sfst2`, `gunpoint`, `porch`, `hospital`, `parkedcar`) are prepared from the command line.
+Clips are never committed; `fetch_clips` re-downloads the exact sections (see `docs/CLIPS.md`). From `backend/`:
+
+```powershell
+python -m app.fetch_clips             # data/clips/<case>.mp4
+python -m app.cases sfst2             # analyze -> data/cases/sfst2/result.json, then score it
+python -m app.evaluate sfst2          # re-score against data/ground_truth/sfst2.json
+```
+
+Reports are in `data/reports/`, answer keys in `data/ground_truth/`. Results in `data/cases/` stay on the machine
+that made them.
+
+### Configuration (`backend/.env`)
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `GOOGLE_API_KEY` | (required) | Vertex AI key |
+| `GEMINI_MODEL` / `CLAIMS_MODEL` | `gemini-3.8-flash` | Model for the claim checks |
+| `ELEVENLABS_API_KEY` | (none) | Enables the timed transcript |
+| `CHECK_FPS` / `SECOND_LOOK_FPS` | `2` / `5` | Frames per second sent for the check and the re-check |
+| `POSE_MODEL` / `POSE_FPS` | `yolo11n-pose.pt` / `10` | Pose weights and sampling rate |
+| `FRONTEND_ORIGIN` | `http://localhost:3000` | Allowed browser origin (CORS) |
+| `DATA_DIR` | `data/` | Where clips, cases and uploads live |
+| `MAX_UPLOAD_MB` | `2048` | Upload size limit |
+| `FFMPEG_TIMEOUT_SEC` / `API_TIMEOUT_SEC` / `ANALYSIS_TIMEOUT_SEC` | `300` / `60` / `1800` | Time limits |
+
+### Tests
+
+From the repository root (model services are mocked, so no key is needed):
+
+```powershell
+.\backend\.venv\Scripts\python.exe -m unittest discover -s backend/tests -v
+```
+
+## Operations notes
+
+- Run **one** API process per data directory. A file lock stops a second process from taking over running jobs.
+  Jobs queue in memory and run one at a time; a restart marks unfinished jobs as failed rather than resuming them.
+- Each upload attempt has a `run_id`. Stop and delete requests should pass `?run_id=…` so they never act on a newer
+  upload with the same case name. `GET /case-jobs?include_finished=true` recovers finished and failed jobs after a
+  refresh.
+- Progress percentages are estimates; the job heartbeat shows the worker is alive, not that a model call is
+  advancing.
+- On Windows/OneDrive, deletion clears read-only attributes inside the case folder and retries. Genuine sharing
+  errors are reported and can be retried.
 
 ## Rules
-- `schema.py` and `shared/types.ts` change together, via PR only (while the Python backend exists).
-- Clips are not committed; `python -m app.fetch_clips` (from `backend/`) downloads them into
-  `data/clips/`. See [`docs/CLIPS.md`](docs/CLIPS.md) to add one.
-- Footage must be publicly released by an official source, non-graphic, and cited. Reports are
-  team-written and labelled as such. No non-public case material (`context/safety.md`).
-- Never commit API keys; `.env` / `.env.local` stay local.
-- UI and pitch copy never say lie, false, verdict, guilt, risk score, or contradiction proven.
 
-## Backend reliability and operations
+- `backend/app/ledger.py` and `shared/types.ts` change together, in one PR.
+- Footage must be publicly released, non-graphic and cited. Reports are team-written and labelled as such. No
+  non-public case material (`context/safety.md`).
+- Never commit API keys; `.env` files stay local.
+- UI and pitch copy never say lie, false, verdict, guilt, risk score or "contradiction proven"
+  (`context/frontend.md`).
+- Scope and decisions: read `context/main.md` first; decisions are logged in `context/decisions.md`.
 
-Run one API process per data directory (`uvicorn app.main:app --port 8000`). A file lock prevents a second process from taking over running jobs. Queued work is in memory; restart marks unfinished jobs failed rather than silently resuming them. A normal shutdown retains interrupted uploads for inspection or deletion.
-
-Each upload attempt has a `run_id`. Stop/delete clients should send `?run_id=...` to avoid acting on a newer upload with the same case name. `POST /cases/{case}/stop` cancels queued jobs immediately and requests cancellation of running jobs. A processing response means deletion is pending; keep polling until the job returns 404. A locked file produces an explicit deletion failure that can be retried. `DELETE /cases/{case}` and `DELETE /analyses/{id}` also remove completed or failed uploads and their artifacts. Closing a tab still only hides the tab; the queue's Delete action removes the files.
-
-`GET /case-jobs` remains active-only for compatibility. Use `?include_finished=true` to recover completed and failed jobs after refreshing. Job responses include `updated_at`, `heartbeat_at`, `cancellation_requested`, and `progress_kind: "estimate"`. The heartbeat indicates worker liveness, not measured model progress. Upload bytes are reported separately by the browser; model stages use estimated milestones.
-
-Incoming multipart requests are bounded before disk spooling, with 1 MiB allowance for report/headers beyond `MAX_UPLOAD_MB`. Video bytes and report text are separately checked. Model copies are re-encoded and size-checked against the inline byte limit. Configure `FFMPEG_TIMEOUT_SEC` (300), `API_TIMEOUT_SEC` (60 per network attempt), and `ANALYSIS_TIMEOUT_SEC` (1800 for a running job). FFmpeg is cancellable during execution; synchronous network calls and pose inference stop at operation boundaries. Model retries check cancellation between attempts. This is a local single-worker service, not a durable distributed job queue.
-
-Run backend regressions from the repository root:
-
-    .\backend\.venv\Scripts\python.exe -m unittest discover -s backend/tests -v
-
-The suite mocks paid model services and exercises cancellation races, replacement uploads, Windows read retries, atomic results, recoverable deletion errors, incoming upload limits, and actual subprocess cancellation/timeouts.
-
-### Preparation progress, Windows deletion, and Home navigation
-
-Preparation now reports normalization, local pose-model loading, tracker startup, pose frames, and overlay encoding separately. FFmpeg stages report processed timestamps rather than waiting until they exit. Pose weights resolve relative to `backend/` (or an absolute `POSE_MODEL` path); a missing model fails explicitly rather than silently downloading during analysis. Install the local weights before starting analysis. The overall percentage remains an estimate; a live heartbeat does not mean a model step is advancing.
-
-Windows/OneDrive may set the read-only attribute on case directories as well as files. Deletion clears that attribute only inside the validated case directory when Windows rejects deletion, then retries. Genuine sharing or access errors remain visible. The browser releases the case's video playback request before deletion. Previously failed deletions can be retried using Delete.
-
-Home (`/`) is now a case overview with the active queue, failed jobs, and completed cases. It no longer redirects into the default case, so leaving the upload page has a stable destination. Running analyses continue on the server.
+`/events` and `app/pipeline.py` are the original Gemini-only event-detection prototype, kept for reference; the
+product flow does not use them.
