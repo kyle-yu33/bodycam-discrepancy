@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
+import { UploadProvider } from "@/components/Uploads";
+import { ConfirmProvider } from "@/components/ConfirmDialog";
 
 // next/font loads the files itself, so we don't depend on webpack resolving the CSS-only packages.
 const inter = localFont({
@@ -29,7 +31,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${inter.variable} ${garamond.variable}`}>
-      <body className="antialiased">{children}</body>
+      <body className="antialiased"><ConfirmProvider><UploadProvider>{children}</UploadProvider></ConfirmProvider></body>
     </html>
   );
 }

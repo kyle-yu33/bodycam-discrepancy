@@ -2,7 +2,10 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { useConfirm } from "@/components/ConfirmDialog";
 import { deleteCase, releaseCaseMedia, listCaseJobs, stopCase, type CaseJob } from "@/lib/ledger";
+
+import { Transfers, useUploads } from "@/components/Uploads";
 
 const POLL_MS = 3000;
 
@@ -10,7 +13,10 @@ const queuedLabel = (ahead: number) => (ahead === 0 ? "Queued, next" : `Queued, 
 
 // Persisted job history survives navigation and refresh, including failed uploads.
 export function useCaseJobs(onComplete?: () => void) {
+  const confirm = useConfirm();
+  const { acknowledge } = useUploads();
   const router = useRouter();
+  const [allJobs, setAllJobs] = useState<CaseJob[]>([]);
   const [active, setActive] = useState<CaseJob[]>([]);
   const [finished, setFinished] = useState<CaseJob[]>([]);
   const [stopping, setStopping] = useState<Set<string>>(new Set());
@@ -30,6 +36,8 @@ export function useCaseJobs(onComplete?: () => void) {
         const jobs = await listCaseJobs();
         if (!alive) return;
         setPollError("");
+        setAllJobs(jobs);
+        acknowledge(jobs.map((j) => j.id));
         const running = jobs.filter((j) => j.status === "queued" || j.status === "processing");
         setActive(running);
         setStopping(new Set(running.filter((j) => j.cancellation_requested).map((j) => j.id)));
@@ -46,7 +54,7 @@ export function useCaseJobs(onComplete?: () => void) {
     };
     void load();
     return () => { alive = false; clearTimeout(timer); };
-  }, []);
+  }, [acknowledge]);
 
   const dismiss = (id: string) => {
     const job = finished.find((j) => j.id === id);
@@ -55,7 +63,7 @@ export function useCaseJobs(onComplete?: () => void) {
     setFinished((f) => f.filter((j) => j.id !== id));
   };
   const stop = async (id: string) => {
-    if (!window.confirm(`Stop analyzing ${id} and delete its files?`)) return;
+    if (!await confirm({ title: "Stop analysis and delete files?", description: `This will stop analysis of “${id}” and delete its uploaded files. This cannot be undone.`, action: "Stop and delete" })) return;
     setStopError("");
     setStopping((s) => new Set(s).add(id));
     try {
@@ -67,17 +75,18 @@ export function useCaseJobs(onComplete?: () => void) {
     }
   };
   const remove = async (id: string) => {
-    if (!window.confirm(`Permanently delete ${id}, including its video, report, and analysis?`)) return;
+    if (!await confirm({ title: "Delete this case?", description: `Are you sure you want to delete “${id}”? Its video, report, and analysis will be permanently removed. This cannot be undone.`, action: "Delete case" })) return;
     const restoreMedia = releaseCaseMedia(id);
     try {
-      await deleteCase(id, finished.find((j) => j.id === id)?.run_id);
+      await deleteCase(id, allJobs.find((j) => j.id === id)?.run_id);
       setFinished((f) => f.filter((j) => j.id !== id));
+      setAllJobs((items) => items.filter((j) => j.id !== id));
       setStopError("");
       completeRef.current?.();
-      if (window.location.pathname === `/cases/${encodeURIComponent(id)}`) router.push("/");
+      if (window.location.pathname === `/cases/${encodeURIComponent(id)}`) router.push("/cases");
     } catch (e) { restoreMedia(); setStopError((e as Error).message); }
   };
-  return { active, finished, dismiss, stop, remove, stopping, stopError: stopError || pollError };
+  return { allJobs, active, finished, dismiss, stop, remove, stopping, stopError: stopError || pollError };
 }
 
 export function QueueList({ active, finished = [], mine, onDismiss, onStop, onDelete, stopping }: {
@@ -91,7 +100,7 @@ export function QueueList({ active, finished = [], mine, onDismiss, onStop, onDe
         <li key={j.run_id}>
           <div className="flex items-baseline justify-between gap-3 text-sm">
             <span className="truncate">
-              <span className="font-medium">{j.id}</span>
+              <Link href={`/cases/${encodeURIComponent(j.id)}`} className="font-medium hover:underline">{j.id}</Link>
               <span className="text-muted"> · {j.filename}{j.id === mine ? " · your upload" : ""}</span>
             </span>
             <span className="flex shrink-0 items-baseline gap-2 text-xs text-muted">
@@ -115,7 +124,7 @@ export function QueueList({ active, finished = [], mine, onDismiss, onStop, onDe
         <li key={j.run_id} className="flex items-start justify-between gap-3 text-sm">
           <span className="min-w-0">
             <span className="block truncate">
-              <span className="font-medium">{j.id}</span>
+              <Link href={`/cases/${encodeURIComponent(j.id)}`} className="font-medium hover:underline">{j.id}</Link>
               <span className="text-muted"> · {j.filename}</span>
             </span>
             {j.status === "complete" ? (
@@ -137,37 +146,40 @@ export function QueueList({ active, finished = [], mine, onDismiss, onStop, onDe
 // Header pill: shows only while something is queued, running, or just finished; opens the full list.
 export function QueueMenu({ onComplete }: { onComplete?: () => void }) {
   const { active, finished, dismiss, stop, remove, stopping, stopError } = useCaseJobs(onComplete);
+  const { transfers } = useUploads();
+  const uploading = transfers.filter((t) => !t.caseId && !t.error).length;
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
-    const onDown = (e: MouseEvent) => { if (!box.current?.contains(e.target as Node)) setOpen(false); };
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    const onDown = (e: MouseEvent) => { if (!box.current?.contains(e.target as Node) && !document.querySelector("dialog[open]")) setOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && !document.querySelector("dialog[open]")) setOpen(false); };
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
     return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onKey); };
   }, [open]);
 
-  if (!active.length && !finished.length && !stopError) return null;
   const running = active.filter((j) => j.status === "processing").length;
   const queued = active.length - running;
   const ready = finished.filter((j) => j.status === "complete").length;
-  const label = [running && `${running} analyzing`, queued && `${queued} queued`, !active.length && ready && `${ready} ready`,
-    !active.length && !ready && `${finished.length} failed`].filter(Boolean).join(" · ");
+  const label = [uploading && `${uploading} uploading`, running && `${running} analyzing`, queued && `${queued} queued`, !active.length && ready && `${ready} ready`,
+    !active.length && !ready && finished.length > 0 && `${finished.length} failed`].filter(Boolean).join(" · ");
 
   return (
     <div ref={box} className="relative z-50">
       <button onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-haspopup="dialog"
         className={`inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-md border px-3 text-sm transition-colors ${open ? "border-brass/50 bg-hairline text-ink" : "border-hairline text-ink-2 hover:border-brass/50 hover:bg-hairline hover:text-ink"}`}>
         <span className={`h-2 w-2 rounded-full ${active.length ? "animate-pulse bg-review" : ready ? "bg-consistent" : "bg-review"}`} aria-hidden />
-        {label || "Queue unavailable"}
+        {label ? `Queue · ${label}` : "Queue"}
       </button>
       {open && (
         <div role="dialog" aria-label="Analysis queue"
-          className="absolute right-0 top-full z-50 mt-2 w-80 rounded-lg border border-hairline bg-raised p-4 text-left shadow-2xl">
+          className="absolute right-0 top-full z-50 mt-2 w-[min(24rem,calc(100vw-2rem))] max-h-[70vh] overflow-y-auto rounded-lg border border-hairline bg-raised p-4 text-left shadow-2xl">
           <h2 className="text-sm font-semibold">Analysis queue</h2>
           <p className="mb-3 mt-0.5 text-xs text-muted">Cases run one at a time, in upload order.</p>
+          <Transfers knownIds={[...active, ...finished].map((j) => j.id)} />
+          {!active.length && !finished.length && !transfers.length && <p className="py-3 text-sm text-muted">No analyses in the queue.</p>}
           <QueueList active={active} finished={finished} onDismiss={dismiss} onDelete={remove} onStop={stop} stopping={stopping} />
           {stopError && <p className="mt-3 text-xs text-review" role="alert">{stopError}</p>}
         </div>

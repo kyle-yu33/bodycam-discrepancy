@@ -10,12 +10,12 @@ export type ReportView = "report" | "claims";
 function Tabs({ view, setView, revealed, count }: { view: ReportView; setView: (v: ReportView) => void; revealed: boolean; count: number }) {
   return (
     <div className="flex h-12 shrink-0 items-stretch gap-6 border-b border-hairline px-6" role="tablist" aria-label="Report view">
-      {(["report", "claims"] as const).map((v) => {
+      {(["claims", "report"] as const).map((v) => {
         const active = view === v || (!revealed && v === "report");
         return (
           <button key={v} role="tab" aria-selected={active} onClick={() => setView(v)} disabled={v === "claims" && !revealed}
             className={`-mb-px flex items-center gap-2 whitespace-nowrap border-b-2 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${active ? "border-brass font-medium text-ink" : "border-transparent text-muted hover:border-brass/45 hover:text-ink"}`}>
-            {v === "report" ? <><FileIcon className="h-4 w-4" /> Report</> : <>Claims {revealed && <span className="rounded-full bg-sunken px-1.5 text-[11px] tabular-nums text-muted">{count}</span>}</>}
+            {v === "report" ? <><FileIcon className="h-4 w-4" /> Report</> : <>Findings {revealed && <span className="rounded-full bg-sunken px-1.5 text-[11px] tabular-nums text-muted">{count}</span>}</>}
           </button>
         );
       })}
