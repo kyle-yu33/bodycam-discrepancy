@@ -4,15 +4,17 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import numpy as np
 
 os.environ["DATA_DIR"] = tempfile.mkdtemp()  # before importing cases, which reads it
 
-from backend.app import cases, evaluate, pose
-from backend.app.ledger import CaseResult, Claim, ClaimCheck, ClaimResult, PoseEvent, SecondLook
-from backend.app.transcribe import Transcript
+from backend.app import cases, evaluate, pose, speakers
+from backend.app.ledger import (Agreement, Agreements, CaseResult, Claim, ClaimCheck, ClaimChecks, ClaimResult,
+                                PoseEvent, SecondLook)
+from backend.app.transcribe import Segment, SpeakerRole, Transcript
 
 
 def body(arm_deg=10.0, hand_at_nose=None):
@@ -80,17 +82,49 @@ def check(cid, status, s=10.0, e=20.0):
 @patch("backend.app.cases.video.frame")
 @patch("backend.app.cases.video.cut")
 class GateTests(unittest.TestCase):
-    def finish(self, c, chk, confirmed=True):
+    def finish(self, c, chk, confirmed=True, finding=None, recheck=False, third="cannot_tell"):
+        finding = finding or ("incompatible_with_claim" if confirmed else "cannot_tell")
         with patch("backend.app.cases.ck.second_look",
-                   return_value=SecondLook(observation="look", confirmed=confirmed)) as look:
-            r = cases._finish(None, "t", Path("clip.mp4"), 60.0, c, chk, [], log=lambda *_: None)
+                   return_value=SecondLook(observation="look", finding=finding)) as look, \
+             patch("backend.app.cases.ck.adjudicate",
+                   return_value=SecondLook(observation="third", finding=third)) as self.third:
+            r = cases._finish(None, "t", Path("clip.mp4"), 60.0, c, chk, [], None, log=lambda *_: None,
+                              recheck=recheck)
         return r, look
 
     def test_flag_survives_only_when_second_look_confirms(self, *_):
         r, _ = self.finish(claim("c1"), check("c1", "potential_inconsistency"), confirmed=True)
-        self.assertEqual(r.status, "potential_inconsistency")
+        self.assertEqual((r.status, r.observation, r.first_pass_observation), ("potential_inconsistency", "obs", None))
         r, _ = self.finish(claim("c1"), check("c1", "potential_inconsistency"), confirmed=False)
         self.assertEqual((r.status, r.downgraded), ("insufficient_footage", True))
+        # The shown observation is the re-check's reason, never the overruled flag's.
+        self.assertEqual((r.observation, r.first_pass_observation), ("look", "obs"))
+        self.third.assert_not_called()
+
+    def test_contradicting_reviews_go_to_a_third_look_that_decides(self, *_):
+        # First pass: flag (the footage shows otherwise). Re-check: the footage matches the claim. Neither wins by
+        # going last; the third look decides, and its text is what's shown.
+        flag = check("c1", "potential_inconsistency")
+        r, _ = self.finish(claim("c1"), flag, finding="matches_claim", third="incompatible_with_claim")
+        self.assertEqual((r.status, r.downgraded, r.observation, r.adjudication),
+                         ("potential_inconsistency", False, "third", "third"))
+        self.assertEqual((r.second_look, r.first_pass_observation), ("look", "obs"))
+        self.assertEqual(sorted(self.third.call_args.args[5:7]), ["look", "obs"])   # both reviews, unlabeled
+        r, _ = self.finish(claim("c1"), flag, finding="matches_claim", third="matches_claim")
+        self.assertEqual((r.status, r.downgraded), ("consistent", True))
+        r, _ = self.finish(claim("c1"), flag, finding="matches_claim", third="cannot_tell")
+        self.assertEqual(r.status, "insufficient_footage")
+
+    def test_disagreeing_observation_is_rechecked_and_replaced(self, *_):
+        # e.g. "his feet are apart" next to insufficient_footage: the re-check's finding decides, with its own text.
+        r, look = self.finish(claim("c1"), check("c1", "insufficient_footage"), confirmed=True, recheck=True)
+        look.assert_called_once()
+        self.assertEqual((r.status, r.downgraded, r.observation, r.first_pass_observation),
+                         ("potential_inconsistency", False, "look", "obs"))
+        r, _ = self.finish(claim("c1"), check("c1", "insufficient_footage"), confirmed=False, recheck=True)
+        self.assertEqual((r.status, r.observation), ("insufficient_footage", "look"))   # same status, text replaced
+        r, look = self.finish(claim("c1"), check("c1", "consistent"))
+        look.assert_not_called()                                                          # agreeing non-flags: no call
 
     def test_flag_without_window_is_downgraded_without_a_call(self, *_):
         r, look = self.finish(claim("c1"), check("c1", "potential_inconsistency", None, None))
@@ -110,6 +144,44 @@ class GateTests(unittest.TestCase):
         self.finish(claim("c1"), check("c1", "potential_inconsistency", 30.0, 32.0))
         _, _, s, e = cut.call_args.args[:4]
         self.assertGreaterEqual(e - s, cases.MIN_WINDOW)
+
+
+class AgreementTests(unittest.TestCase):
+    def test_only_checkable_claims_are_sent_and_disagreeing_ids_returned(self):
+        class FakeGemini:
+            def generate(self, contents, schema, model=None, system=None):
+                self.prompt = contents[0]
+                return Agreements(items=[Agreement(claim_id="c1", reason="r", agrees=False),
+                                         Agreement(claim_id="c2", reason="r", agrees=True)])
+        g = FakeGemini()
+        claims = [claim("c1"), claim("c2"), claim("c3", "subjective_or_legal")]
+        checks = {c.id: check(c.id, "insufficient_footage") for c in claims}
+        self.assertEqual(cases.ck.disagreements(g, claims, checks), {"c1"})
+        self.assertNotIn("c3:", g.prompt)
+
+
+class RobustnessTests(unittest.TestCase):
+    def test_failed_agreement_check_rechecks_every_checkable_claim(self):
+        claims = [claim("c1"), claim("c2", "subjective_or_legal")]
+        with patch("backend.app.cases.ck.disagreements", side_effect=RuntimeError("500 INTERNAL")):
+            self.assertEqual(cases._disagreements(None, claims, {}, lambda *_: None), {"c1"})
+
+    def test_stopping_a_run_is_never_swallowed_by_a_fallback(self):
+        from backend.app.runtime import Cancelled
+        for stop in (Cancelled("Stopped by reviewer"), TimeoutError("Analysis exceeded its time limit")):
+            with patch("backend.app.cases.ck.disagreements", side_effect=stop), self.assertRaises(type(stop)):
+                cases._disagreements(None, [claim("c1")], {}, lambda *_: None)
+
+    def test_long_clips_are_sampled_within_the_frame_budget(self):
+        seen = {}
+        class FakeGemini:
+            def generate(self, contents, schema, model=None, system=None):
+                seen["fps"] = contents[0].video_metadata.fps
+                return ClaimChecks(checks=[])
+        with patch("backend.app.claims.ensure_model_size"), \
+             patch("backend.app.claims.video_part", side_effect=lambda p, fps: SimpleNamespace(video_metadata=SimpleNamespace(fps=fps))):
+            cases.ck.check(FakeGemini(), Path("v.mp4"), [claim("c1")], "", 3600.0, False, None)
+        self.assertLessEqual(seen["fps"] * 3600.0, cases.ck.MAX_VIDEO_FRAMES)
 
 
 class EvaluateTests(unittest.TestCase):
@@ -150,6 +222,35 @@ class TranscriptTests(unittest.TestCase):
              patch("backend.app.cases.transcribe", side_effect=RuntimeError("down")):
             cases._transcript(Path("clip.mp4"), self.out, lambda _: None)
         self.assertFalse((self.out / "transcript.json").exists())
+
+    def test_prompt_lines_are_windowed_and_name_roles(self):
+        t = transcript(roles={"speaker_1": SpeakerRole(role="subject")})
+        text = cases.ck.transcript_text(t, 30.0, 40.0)
+        self.assertIn("31.1-31.5s subject [speaker_1]: One.", text)
+        self.assertNotIn("Left", text)
+        self.assertIn("speaker_0: Left,", cases.ck.transcript_text(t))   # no role yet: raw label
+        self.assertEqual(cases.ck.transcript_text(None), "")
+
+
+def transcript(roles=None):
+    seg = lambda i, s, e, spk, text: Segment(id=f"seg-{i}", start_sec=s, end_sec=e, speaker=spk, text=text, words=[])
+    return Transcript(language_code="en", text="", segments=[seg(1, 1.0, 2.0, "speaker_0", "Left,"),
+                                                              seg(2, 31.1, 31.5, "speaker_1", "One.")],
+                      speakers=roles or {})
+
+
+class SpeakerTests(unittest.TestCase):
+    def test_every_label_gets_a_role_and_the_camera_wearer_is_a_unique_officer(self):
+        A = speakers.Assignment
+        roles = speakers.validate(transcript(), [A(speaker="speaker_0", role="subject", camera_wearer=True, evidence="e"),
+                                                 A(speaker="speaker_9", role="officer", camera_wearer=False, evidence="e")])
+        self.assertEqual(set(roles), {"speaker_0", "speaker_1"})           # unknown label dropped, missing one added
+        self.assertEqual((roles["speaker_0"].role, roles["speaker_0"].camera_wearer), ("subject", False))
+        self.assertEqual(roles["speaker_1"].role, "unknown")
+        two = speakers.validate(transcript(), [A(speaker=k, role="officer", camera_wearer=True, evidence="e")
+                                               for k in ("speaker_0", "speaker_1")])
+        self.assertFalse(any(r.camera_wearer for r in two.values()))       # ambiguous: keep neither
+        self.assertEqual(speakers.who(transcript({"speaker_0": two["speaker_0"]}), "speaker_0"), "officer [speaker_0]")
 
 
 if __name__ == "__main__":

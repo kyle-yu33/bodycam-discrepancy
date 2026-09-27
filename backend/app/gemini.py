@@ -8,19 +8,30 @@ import httpx
 from .runtime import check, pause
 from .schema import Detections, Detail, Candidate
 
-MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
+TEMPERATURE = float(os.getenv("GEMINI_TEMPERATURE", "0"))
 MAX_INLINE_BYTES = 15 * 1024 * 1024
 
 def video_part(path: Path, fps: float | None = None) -> types.Part:
     # Vertex AI has no Files API, so the clip is sent inline; requests are capped at ~20 MB after base64.
     if path.stat().st_size > MAX_INLINE_BYTES:
         raise ValueError(f"Clip {path.name} is too large to send inline to Vertex AI")
+    # HIGH is the most detail Vertex accepts for video frames (~3.5x the default tokens). At the default, 3.8 Flash
+    # misread a head held tilted back as lowered; at HIGH it read it correctly (3/3 each, 2026-09-26).
     return types.Part(inline_data=types.Blob(data=path.read_bytes(), mime_type="video/mp4"),
-                      video_metadata=types.VideoMetadata(fps=fps) if fps else None)
+                      video_metadata=types.VideoMetadata(fps=fps) if fps else None,
+                      media_resolution=types.PartMediaResolution(level=types.PartMediaResolutionLevel.MEDIA_RESOLUTION_HIGH))
+
+def thinking(model: str) -> types.ThinkingConfig | None:
+    # Highest thinking level; only Gemini 3+ takes thinking_level (2.5 models used for comparison reject it).
+    return types.ThinkingConfig(thinking_level=types.ThinkingLevel.HIGH) if model.startswith("gemini-3") else None
 
 class Gemini:
     def __init__(self):
-        self.client = genai.Client(vertexai=True, api_key=os.environ["GOOGLE_API_KEY"], http_options=types.HttpOptions(timeout=int(float(os.getenv("API_TIMEOUT_SEC", "60")) * 1000), retry_options=types.HttpRetryOptions(attempts=1)))
+        # Own timeout, longer than API_TIMEOUT_SEC: a claim check with high thinking on high-resolution video takes
+        # over 60 s (Vertex answers 504 DEADLINE_EXCEEDED at that limit). ANALYSIS_TIMEOUT_SEC still bounds the run.
+        timeout_ms = int(float(os.getenv("GEMINI_TIMEOUT_SEC", "300")) * 1000)
+        self.client = genai.Client(vertexai=True, api_key=os.environ["GOOGLE_API_KEY"], http_options=types.HttpOptions(timeout=timeout_ms, retry_options=types.HttpRetryOptions(attempts=1)))
 
     def close(self):
         self.client.close()
@@ -30,13 +41,15 @@ class Gemini:
         ensure_model_size(path)
         return self.generate([video_part(path), prompt], schema)
 
-    def generate(self, contents, schema, model: str | None = None):
+    def generate(self, contents, schema, model: str | None = None, system: str | None = None):
         for attempt in range(3):
             check()
             try:
                 response = self.client.models.generate_content(
                     model=model or MODEL, contents=contents,
-                    config=types.GenerateContentConfig(response_mime_type="application/json", response_schema=schema, temperature=0))
+                    config=types.GenerateContentConfig(response_mime_type="application/json", response_schema=schema, temperature=TEMPERATURE,
+                                                       system_instruction=system,
+                                                       thinking_config=thinking(model or MODEL)))
                 check()
                 if response.parsed is None:
                     raise RuntimeError("Gemini returned no structured analysis")
@@ -44,7 +57,7 @@ class Gemini:
             except errors.APIError as exc:
                 if attempt == 2 or exc.code not in (429, 500, 502, 503, 504):
                     raise
-                pause(2 ** (attempt + 1))
+                pause(15 * (attempt + 1) if exc.code == 429 else 2 ** (attempt + 1))   # rate limits need longer
 
             except (httpx.TimeoutException, httpx.TransportError):
                 check()

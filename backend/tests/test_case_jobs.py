@@ -137,7 +137,7 @@ class CaseUploadTests(unittest.TestCase):
     def test_long_video_check_reaches_later_windows_on_original_timeline(self):
         claim = Claim(id="c1", text="A person fired a gun", claim_type="visual")
         starts = []
-        def check(g, path, claims, pose, duration, overlay, segment_start, segment_end):
+        def check(g, path, claims, pose, duration, overlay, segment_start, segment_end, transcript=None):
             starts.append(segment_start)
             if segment_start < 100:
                 return [ClaimCheck(claim_id="c1", observation="No relevant moment here",

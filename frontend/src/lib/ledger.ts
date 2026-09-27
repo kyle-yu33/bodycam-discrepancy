@@ -27,6 +27,8 @@ export interface ClaimResult {
   person_track_id: number | null;
   second_look: string | null;
   downgraded: boolean;
+  first_pass_observation?: string | null; // set when a re-check replaced the first text; observation holds the re-check's
+  adjudication?: string | null; // third review's text when the first two contradicted each other; it set the status
   evidence_frames: string[];
   pose_events: PoseEvent[];
 }
