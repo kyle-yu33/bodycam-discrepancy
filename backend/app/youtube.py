@@ -1,9 +1,9 @@
 """Import a public YouTube video for report review."""
 import re
-import subprocess
 import sys
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
+from .video import run
 
 VIDEO_ID = re.compile(r"^[A-Za-z0-9_-]{11}$")
 YOUTUBE_HOSTS = {"youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be", "www.youtu.be"}
@@ -35,24 +35,21 @@ def download_video(url: str, destination: Path) -> tuple[Path, str]:
     """Download the complete video at up to 720p using yt-dlp."""
     canonical = validate_youtube_url(url)
     destination.mkdir(parents=True, exist_ok=True)
-    title_result = subprocess.run(
+    title_output = run(
         [sys.executable, "-m", "yt_dlp", "--no-playlist", "--no-warnings", "--get-title", canonical],
-        capture_output=True, text=True, timeout=45,
+        timeout_sec=45,
     )
-    if title_result.returncode:
-        raise RuntimeError("Could not read that YouTube video. It may be private, unavailable, or blocked.")
-    title = next(iter(title_result.stdout.strip().splitlines()), "YouTube video")[:180]
+    title = next(iter(title_output.strip().splitlines()), "YouTube video")[:180]
 
     template = str(destination / "original.%(ext)s")
-    result = subprocess.run(
+    run(
         [sys.executable, "-m", "yt_dlp", canonical, "--no-playlist", "--no-warnings",
          "-f", "bv*[height<=720]+ba/b[height<=720]", "--merge-output-format", "mp4",
          "--output", template],
-        capture_output=True, text=True, timeout=3600,
+        timeout_sec=3600,
     )
     video = next((path for path in destination.glob("original.*")
                   if path.suffix in {".mp4", ".webm", ".mkv"} and path.is_file() and path.stat().st_size), None)
-    if result.returncode or video is None:
-        detail = result.stderr[-800:].strip()
-        raise RuntimeError("Could not download the YouTube video." + (f" {detail}" if detail else ""))
+    if video is None:
+        raise RuntimeError("Could not download the YouTube video.")
     return video, title

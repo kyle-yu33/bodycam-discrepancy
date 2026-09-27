@@ -151,13 +151,20 @@ class RobustnessTests(unittest.TestCase):
         with patch("backend.app.cases.ck.disagreements", side_effect=RuntimeError("500 INTERNAL")):
             self.assertEqual(cases._disagreements(None, claims, {}, lambda *_: None), {"c1"})
 
+    def test_stopping_a_run_is_never_swallowed_by_a_fallback(self):
+        from backend.app.runtime import Cancelled
+        for stop in (Cancelled("Stopped by reviewer"), TimeoutError("Analysis exceeded its time limit")):
+            with patch("backend.app.cases.ck.disagreements", side_effect=stop), self.assertRaises(type(stop)):
+                cases._disagreements(None, [claim("c1")], {}, lambda *_: None)
+
     def test_long_clips_are_sampled_within_the_frame_budget(self):
         seen = {}
         class FakeGemini:
             def generate(self, contents, schema, model=None, system=None):
                 seen["fps"] = contents[0].video_metadata.fps
                 return ClaimChecks(checks=[])
-        with patch("backend.app.claims.video_part", side_effect=lambda p, fps: SimpleNamespace(video_metadata=SimpleNamespace(fps=fps))):
+        with patch("backend.app.claims.ensure_model_size"), \
+             patch("backend.app.claims.video_part", side_effect=lambda p, fps: SimpleNamespace(video_metadata=SimpleNamespace(fps=fps))):
             cases.ck.check(FakeGemini(), Path("v.mp4"), [claim("c1")], "", 3600.0, False, None)
         self.assertLessEqual(seen["fps"] * 3600.0, cases.ck.MAX_VIDEO_FRAMES)
 

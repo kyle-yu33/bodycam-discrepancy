@@ -23,6 +23,7 @@ import cv2
 import numpy as np
 
 from .ledger import PoseEvent
+from .runtime import check
 
 # COCO-17 keypoints
 NOSE, LEYE, REYE, LEAR, REAR = 0, 1, 2, 3, 4
@@ -53,8 +54,14 @@ _model = None
 def _get_model():
     global _model
     if _model is None:
+        weights = Path(os.getenv("POSE_MODEL", "yolo11n-pose.pt"))
+        if not weights.is_absolute():
+            weights = Path(__file__).resolve().parents[1] / weights
+        if not weights.is_file():
+            raise FileNotFoundError(f"Pose model not installed at {weights}. Set POSE_MODEL to a local weights file.")
+        check()
         from ultralytics import YOLO  # heavy import, load once
-        _model = YOLO(os.getenv("POSE_MODEL", "yolo11n-pose.pt"))  # auto-downloads
+        _model = YOLO(str(weights))
     return _model
 
 
@@ -183,7 +190,7 @@ def to_intervals(hits: dict, gap: float) -> list[PoseEvent]:
     return sorted(out, key=lambda e: (e.start_sec, e.track_id, e.event))
 
 
-def analyze(video_path: Path, out_dir: Path, sample_fps: float = SAMPLE_FPS, on_frame=None) -> tuple[list[PoseEvent], Path]:
+def analyze(video_path: Path, out_dir: Path, sample_fps: float = SAMPLE_FPS, on_frame=None, on_stage=None) -> tuple[list[PoseEvent], Path]:
     """Writes out_dir/pose_raw.mp4 (overlay, no audio) and out_dir/pose_features.csv.
     Returns (events, overlay path). on_frame(fraction_done) is called after each sampled frame."""
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -205,51 +212,64 @@ def analyze(video_path: Path, out_dir: Path, sample_fps: float = SAMPLE_FPS, on_
     prev = None
     rows = []
 
-    results = _get_model().track(source=str(video_path), stream=True, vid_stride=stride, tracker="bytetrack.yaml",
+    check()
+    if on_stage:
+        on_stage("Loading pose model")
+    model = _get_model()
+    check()
+    if on_stage:
+        on_stage("Starting pose tracking")
+    results = model.track(source=str(video_path), stream=True, vid_stride=stride, tracker="bytetrack.yaml",
                                  imgsz=int(os.getenv("POSE_IMGSZ", "640")), verbose=False)
-    for i, r in enumerate(results):
-        t = round(i * dt, 2)
-        prev, shift = camera_shift(prev, r.orig_img)
-        if shift > CAM_MOVE * sample_fps / 10:  # threshold is per 0.1 s
-            moving.append(t)
-            hits.setdefault((CAMERA, "camera_moving"), []).append(t)
-        frame = r.plot(labels=True, conf=False)
-        if r.boxes is not None and r.boxes.id is not None and r.keypoints is not None and r.keypoints.conf is not None:
-            for tid, box, kp, kc in zip(r.boxes.id.int().tolist(), r.boxes.xyxy.cpu().numpy(),
-                                        r.keypoints.xy.cpu().numpy(), r.keypoints.conf.cpu().numpy()):
-                m = measure(kp, kc)
-                if m is None:
-                    continue
-                fl = flags(m)
-                for ev in fl:
-                    hits.setdefault((tid, ev), []).append(t)
-                if m["lean"] is not None:
-                    leans.setdefault(tid, []).append((t, m["lean"]))
-                if m["head_back"] is not None:
-                    heads.setdefault(tid, []).append((t, m["head_back"]))
-                if m["feet_dx"] is not None:
-                    steps.setdefault(tid, []).append((t, m["feet_dx"]))
-                rows.append({"t": t, "track": tid, "cam_shift": round(shift, 4), **m, "flags": " ".join(sorted(fl))})
-                x1, y1 = int(box[0]), int(box[1])
-                for j, ev in enumerate(sorted(fl)):
-                    cv2.putText(frame, ev, (x1 + 4, y1 + 40 + 18 * j), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1, cv2.LINE_AA)
-        h, w = frame.shape[:2]
-        # Video time on every frame: Gemini reads it instead of estimating timestamps, which drift on long clips.
-        stamp, scale = f"t={t:5.1f}s", h / 480
-        org = (int(10 * scale), h - int(14 * scale))
-        cv2.putText(frame, stamp, org, cv2.FONT_HERSHEY_SIMPLEX, 0.9 * scale, (0, 0, 0), int(6 * scale), cv2.LINE_AA)
-        cv2.putText(frame, stamp, org, cv2.FONT_HERSHEY_SIMPLEX, 0.9 * scale, (255, 255, 255), int(2 * scale), cv2.LINE_AA)
-        if writer is None:
-            writer = cv2.VideoWriter(str(raw_path), cv2.VideoWriter_fourcc(*"mp4v"), 1 / dt, (w, h))
-        writer.write(frame)
-        if on_frame:
-            try:
+    try:
+        for i, r in enumerate(results):
+            check()
+            t = round(i * dt, 2)
+            prev, shift = camera_shift(prev, r.orig_img)
+            if shift > CAM_MOVE * sample_fps / 10:  # threshold is per 0.1 s
+                moving.append(t)
+                hits.setdefault((CAMERA, "camera_moving"), []).append(t)
+            frame = r.plot(labels=True, conf=False)
+            if r.boxes is not None and r.boxes.id is not None and r.keypoints is not None and r.keypoints.conf is not None:
+                for tid, box, kp, kc in zip(r.boxes.id.int().tolist(), r.boxes.xyxy.cpu().numpy(),
+                                            r.keypoints.xy.cpu().numpy(), r.keypoints.conf.cpu().numpy()):
+                    m = measure(kp, kc)
+                    if m is None:
+                        continue
+                    fl = flags(m)
+                    for ev in fl:
+                        hits.setdefault((tid, ev), []).append(t)
+                    if m["lean"] is not None:
+                        leans.setdefault(tid, []).append((t, m["lean"]))
+                    if m["head_back"] is not None:
+                        heads.setdefault(tid, []).append((t, m["head_back"]))
+                    if m["feet_dx"] is not None:
+                        steps.setdefault(tid, []).append((t, m["feet_dx"]))
+                    rows.append({"t": t, "track": tid, "cam_shift": round(shift, 4), **m, "flags": " ".join(sorted(fl))})
+                    x1, y1 = int(box[0]), int(box[1])
+                    for j, ev in enumerate(sorted(fl)):
+                        cv2.putText(frame, ev, (x1 + 4, y1 + 40 + 18 * j), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1, cv2.LINE_AA)
+            h, w = frame.shape[:2]
+            # Video time on every frame: Gemini reads it instead of estimating timestamps, which drift on long clips.
+            stamp, scale = f"t={t:5.1f}s", h / 480
+            org = (int(10 * scale), h - int(14 * scale))
+            cv2.putText(frame, stamp, org, cv2.FONT_HERSHEY_SIMPLEX, 0.9 * scale, (0, 0, 0), int(6 * scale), cv2.LINE_AA)
+            cv2.putText(frame, stamp, org, cv2.FONT_HERSHEY_SIMPLEX, 0.9 * scale, (255, 255, 255), int(2 * scale), cv2.LINE_AA)
+            if writer is None:
+                writer = cv2.VideoWriter(str(raw_path), cv2.VideoWriter_fourcc(*"mp4v"), 1 / dt, (w, h))
+            writer.write(frame)
+            if on_frame:
                 on_frame(min(1.0, (i + 1) / sampled))
-            except BaseException:  # stopped: release the file so the case folder can be deleted
-                writer.release()
-                raise
-    if writer is not None:
-        writer.release()
+    finally:
+        if writer is not None:
+            writer.release()
+        results.close()
+        # Ultralytics does not release its input capture on generator.close().
+        dataset = getattr(model.predictor, "dataset", None)
+        capture = getattr(dataset, "cap", None)
+        if capture is not None:
+            capture.release()
+    check()
 
     for tid, series in leans.items():
         for t in sway_times(still(series, moving), dt, steps.get(tid, [])):

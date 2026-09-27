@@ -37,7 +37,7 @@ Uploads must be publicly released footage (`context/safety.md`).
 
 ## Claims pipeline (claim-evidence ledger)
 
-The demo cases (`sfst1`, `sfst2`) are prepared from the command line and replayed from cache.
+The demo cases (`sfst1`, `sfst2`, `gunpoint`, `porch`, `hospital`, `parkedcar`; see `docs/CLIPS.md`) are prepared from the command line and replayed from cache.
 From `backend/`, with `GOOGLE_API_KEY` in `backend/.env`:
 
     python -m app.fetch_clips           # demo clips -> data/clips/
@@ -93,3 +93,27 @@ Tests (from the repo root): `python -m unittest backend/tests/test_pipeline.py -
   team-written and labelled as such. No non-public case material (`context/safety.md`).
 - Never commit API keys; `.env` / `.env.local` stay local.
 - UI and pitch copy never say lie, false, verdict, guilt, risk score, or contradiction proven.
+
+## Backend reliability and operations
+
+Run one API process per data directory (`uvicorn app.main:app --port 8000`). A file lock prevents a second process from taking over running jobs. Queued work is in memory; restart marks unfinished jobs failed rather than silently resuming them. A normal shutdown retains interrupted uploads for inspection or deletion.
+
+Each upload attempt has a `run_id`. Stop/delete clients should send `?run_id=...` to avoid acting on a newer upload with the same case name. `POST /cases/{case}/stop` cancels queued jobs immediately and requests cancellation of running jobs. A processing response means deletion is pending; keep polling until the job returns 404. A locked file produces an explicit deletion failure that can be retried. `DELETE /cases/{case}` and `DELETE /analyses/{id}` also remove completed or failed uploads and their artifacts. Closing a tab still only hides the tab; the queue's Delete action removes the files.
+
+`GET /case-jobs` remains active-only for compatibility. Use `?include_finished=true` to recover completed and failed jobs after refreshing. Job responses include `updated_at`, `heartbeat_at`, `cancellation_requested`, and `progress_kind: "estimate"`. The heartbeat indicates worker liveness, not measured model progress. Upload bytes are reported separately by the browser; model stages use estimated milestones.
+
+Incoming multipart requests are bounded before disk spooling, with 1 MiB allowance for report/headers beyond `MAX_UPLOAD_MB`. Video bytes and report text are separately checked. Model copies are re-encoded and size-checked against the inline byte limit. Configure `FFMPEG_TIMEOUT_SEC` (300), `API_TIMEOUT_SEC` (60 per network attempt), and `ANALYSIS_TIMEOUT_SEC` (1800 for a running job). FFmpeg is cancellable during execution; synchronous network calls and pose inference stop at operation boundaries. Model retries check cancellation between attempts. This is a local single-worker service, not a durable distributed job queue.
+
+Run backend regressions from the repository root:
+
+    .\backend\.venv\Scripts\python.exe -m unittest discover -s backend/tests -v
+
+The suite mocks paid model services and exercises cancellation races, replacement uploads, Windows read retries, atomic results, recoverable deletion errors, incoming upload limits, and actual subprocess cancellation/timeouts.
+
+### Preparation progress, Windows deletion, and Home navigation
+
+Preparation now reports normalization, local pose-model loading, tracker startup, pose frames, and overlay encoding separately. FFmpeg stages report processed timestamps rather than waiting until they exit. Pose weights resolve relative to `backend/` (or an absolute `POSE_MODEL` path); a missing model fails explicitly rather than silently downloading during analysis. Install the local weights before starting analysis. The overall percentage remains an estimate; a live heartbeat does not mean a model step is advancing.
+
+Windows/OneDrive may set the read-only attribute on case directories as well as files. Deletion clears that attribute only inside the validated case directory when Windows rejects deletion, then retries. Genuine sharing or access errors remain visible. The browser releases the case's video playback request before deletion. Previously failed deletions can be retried using Delete.
+
+Home (`/`) is now a case overview with the active queue, failed jobs, and completed cases. It no longer redirects into the default case, so leaving the upload page has a stable destination. Running analyses continue on the server.

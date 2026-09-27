@@ -1,0 +1,32 @@
+{
+  "report": "hospital.txt",
+  "source": "https://www.youtube.com/watch?v=qKlP-zdpj48 4:13-5:00 (python -m app.fetch_clips hospital). Re-published by Audit the Audit (commentary channel); no narration in this section. Indoor lounge, bright, Axon Body 3.",
+  "status": "DRAFT: windows from 1 fps contact sheets and an ElevenLabs transcript. A human must watch the clip, confirm each window and label, then delete this field.",
+  "states": "consistent | potential_inconsistency | insufficient_footage | outside_assessment",
+  "claims": [
+    {"text": "I attended the hospital to conduct a welfare check on SUBJECT F",
+     "claim_type": "documentary", "expected": "insufficient_footage", "planted": false, "window_sec": null,
+     "note": "A lounge room; the reason for the visit isn't shown or said in the clip."},
+    {"text": "I spoke with SUBJECT F while he was on a speakerphone call with his father",
+     "claim_type": "audio", "expected": "consistent", "planted": false, "window_sec": [15, 25],
+     "note": "'Say it out loud. He can hear it' 15.3-16.5 s; 'dad, are you lying to me?' 19.5 s; a third voice answers 'I don't lie' 22.2 s."},
+    {"text": "SUBJECT F became agitated and was acting aggressively throughout the conversation",
+     "claim_type": "subjective_or_legal", "expected": "outside_assessment", "planted": true, "window_sec": [0, 33],
+     "note": "Characterization. He stands still with hands together at chest height 0-33 s; the UI should still link the footage."},
+    {"text": "SUBJECT F stated that he would go above and beyond to hurt me",
+     "claim_type": "audio", "expected": "potential_inconsistency", "planted": true, "window_sec": [25, 33],
+     "note": "Actual words ~28-32.5 s: 'I'll go up, up and beyond to br- ... 'cause my dad doesn't ever lie to me.' No 'hurt' and no mention of the officer. CHECK the cut-off word by ear."},
+    {"text": "SUBJECT F threatened me",
+     "claim_type": "subjective_or_legal", "expected": "outside_assessment", "planted": true, "window_sec": null,
+     "note": "Characterization; the quoted-words claim above is the checkable version."},
+    {"text": "SUBJECT F then lunged at me",
+     "claim_type": "visual", "expected": "potential_inconsistency", "planted": true, "window_sec": [28, 36],
+     "note": "Stands in place, hands together at chest, until the officer steps in and takes hold of him ~33-35 s."},
+    {"text": "I told SUBJECT F to put his hands behind his back and that he was under arrest",
+     "claim_type": "audio", "expected": "consistent", "planted": false, "window_sec": [32, 36],
+     "note": "'Put your hands behind your back. You're under ... arrest, buddy.' 32.7-35.2 s."},
+    {"text": "SUBJECT F resisted while officers placed him in handcuffs",
+     "claim_type": "visual", "expected": "insufficient_footage", "planted": true, "window_sec": [36, 47],
+     "note": "Camera pressed against bodies; arms and cuffs not clearly visible."}
+  ]
+}

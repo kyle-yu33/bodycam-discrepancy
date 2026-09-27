@@ -2,6 +2,7 @@
 import os
 from pathlib import Path
 
+from .video import ensure_model_size
 from .gemini import MODEL, Gemini, video_part
 from .ledger import Agreements, Claim, ClaimCheck, ClaimChecks, Claims, SecondLook
 from .speakers import who
@@ -111,6 +112,7 @@ def check(gemini: Gemini, video: Path, claims: list[Claim], pose_text: str, dura
           overlay: bool, transcript: Transcript | None, segment_start: float | None = None,
           segment_end: float | None = None) -> list[ClaimCheck]:
     """segment_start/end: this video is only that part of the recording (long clips are checked in windows)."""
+    ensure_model_size(video)
     listing = "\n".join(f"{c.id} [{c.claim_type}] {c.text}" for c in claims)
     windowed = segment_start is not None and segment_end is not None
     lines = transcript_text(transcript, segment_start, segment_end) if windowed else transcript_text(transcript)
@@ -129,6 +131,7 @@ def check(gemini: Gemini, video: Path, claims: list[Claim], pose_text: str, dura
 def second_look(gemini: Gemini, window: Path, claim: Claim, start: float, end: float,
                 claim_start: float, claim_end: float, transcript: Transcript | None) -> SecondLook:
     """claim_start/claim_end: the first pass's window, in original-video seconds."""
+    ensure_model_size(window)
     prompt = SECOND_LOOK_PROMPT.format(start=start, end=end, c0=claim_start, c1=claim_end,
                                        text=claim.text, transcript=transcript_text(transcript, start, end))
     return gemini.generate([video_part(window, SECOND_LOOK_FPS), prompt], SecondLook, model=CLAIMS_MODEL,

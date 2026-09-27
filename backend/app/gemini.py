@@ -4,6 +4,8 @@ import time
 from pathlib import Path
 from google import genai
 from google.genai import types, errors
+import httpx
+from .runtime import check, pause
 from .schema import Detections, Detail, Candidate
 
 MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
@@ -26,29 +28,39 @@ def thinking(model: str) -> types.ThinkingConfig | None:
 
 class Gemini:
     def __init__(self):
-        self.client = genai.Client(vertexai=True, api_key=os.environ["GOOGLE_API_KEY"], http_options=types.HttpOptions(timeout=180_000))
+        self.client = genai.Client(vertexai=True, api_key=os.environ["GOOGLE_API_KEY"], http_options=types.HttpOptions(timeout=int(float(os.getenv("API_TIMEOUT_SEC", "60")) * 1000), retry_options=types.HttpRetryOptions(attempts=1)))
 
     def close(self):
         self.client.close()
 
     def analyze(self, path: Path, prompt: str, schema):
+        from .video import ensure_model_size
+        ensure_model_size(path)
         return self.generate([video_part(path), prompt], schema)
 
     def generate(self, contents, schema, model: str | None = None, system: str | None = None):
         for attempt in range(3):
+            check()
             try:
                 response = self.client.models.generate_content(
                     model=model or MODEL, contents=contents,
                     config=types.GenerateContentConfig(response_mime_type="application/json", response_schema=schema, temperature=TEMPERATURE,
                                                        system_instruction=system,
                                                        thinking_config=thinking(model or MODEL)))
+                check()
                 if response.parsed is None:
                     raise RuntimeError("Gemini returned no structured analysis")
                 return schema.model_validate(response.parsed)
             except errors.APIError as exc:
                 if attempt == 2 or exc.code not in (429, 500, 502, 503, 504):
                     raise
-                time.sleep(2 ** (attempt + 1))
+                pause(2 ** (attempt + 1))
+
+            except (httpx.TimeoutException, httpx.TransportError):
+                check()
+                if attempt == 2:
+                    raise
+                pause(2 ** (attempt + 1))
 
     def detect(self, path: Path, duration: float) -> Detections:
         return self.analyze(path, f"""Find candidate events in this bodycam clip. Prioritize recall, but do not invent events.
