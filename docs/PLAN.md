@@ -46,6 +46,13 @@ SCORE    python -m app.evaluate sfst2
 SERVE    uvicorn app.main:app --port 8000
   GET /cases, GET /cases/{case}, /case-media/{case}/...   (video supports seeking)
 
+UPLOAD   (from the UI, instead of PREPARE + ANALYZE)
+  /new -> POST /cases  video (.mp4/.mov, <=90 s) + report text or .txt + optional name
+       -> 202 + job; the single worker thread runs steps 1-6 into data/cases/<id>/
+       -> UI polls GET /cases/{id}/job (stage + progress) -> opens /cases/{id}
+       GET /case-jobs lists every queued or running upload; /new shows it as the analysis queue
+  Results carry origin "upload"; no ground truth, so no scoring. Jobs cut off by a restart are marked failed.
+
 REVIEW UI  (Next.js, to build)
   claims | video | evidence ledger; clicking a claim seeks the video to its window
 ```
@@ -84,9 +91,9 @@ Tests (repo root): `python -m unittest backend/tests/test_claims.py backend/test
 | Fictional reports + answer keys | Done (`main`); answer keys still DRAFT: need a human check with audio |
 | YOLO pose decision | Done (`main`, `context/decisions.md`) |
 | Claims pipeline, pose, scoring, `/cases` API, 19 tests | Working on real Gemini (branch `claims-pipeline`) |
-| Model choice | Comparison in progress |
+| Model choice | Done: gemini-3.8-flash with the harness in section 5 |
 | Timestamps on the 80 s night clip | Solved: the answer key was ~13 s late; the timed transcript now anchors the checks |
-| Review UI (claims ledger) | Not started; current frontend shows the old event API |
+| Review UI (claims ledger) | Built: cached demo replay plus upload flow at `/new` (branch `upload-feature`) |
 | Demo script, backup recording | Not started |
 
 ## 5. Accuracy so far

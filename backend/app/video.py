@@ -47,6 +47,14 @@ def fit(path: Path, max_bytes: int):
          "-c:a", "aac", "-b:a", "64k", "-movflags", "+faststart", str(tmp)])
     tmp.replace(path)
 
+def for_model_window(src: Path, dst: Path, start: float, end: float):
+    """Encode one short window with a bitrate cap so it fits Gemini's inline limit."""
+    run(["ffmpeg", "-y", "-ss", str(start), "-i", str(src), "-t", str(end-start),
+         "-map", "0:v:0", "-map", "0:a:0?", "-vf", "scale=-2:'min(480,ih)'",
+         "-c:v", "libx264", "-preset", "veryfast", "-b:v", "900k", "-maxrate", "1100k",
+         "-bufsize", "2200k", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "64k",
+         "-movflags", "+faststart", str(dst)])
+
 def mux_audio(silent: Path, with_audio: Path, dst: Path):
     """OpenCV writes mp4v video without audio; re-encode to H.264 and copy the audio back in."""
     run(["ffmpeg", "-y", "-i", str(silent), "-i", str(with_audio), "-map", "0:v:0", "-map", "1:a:0?", *ENCODE, "-shortest", str(dst)])

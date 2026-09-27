@@ -42,13 +42,15 @@ export function Workspace({ caseId }: { caseId: string }) {
         setCases(cs);
         setError("");
         const q = new URLSearchParams(window.location.search);
-        setPhase(q.has("instant") ? "loaded" : "ready");
+        // Uploaded cases were just analyzed for real, so there is no cached replay to show.
+        const instant = q.has("instant") || d.origin === "upload";
+        setPhase(instant ? "loaded" : "ready");
         if (q.has("expand")) setExpanded(true);
         if (q.has("how")) setHow(true);
-        autoRun.current = q.has("analyze");
+        autoRun.current = q.has("analyze") && !instant;
         // ?instant=1&claim=c7 opens straight onto one claim (recordings, fallback during the demo).
         const claim = d.results.find((r) => r.claim.id === q.get("claim"));
-        if (q.has("instant") && claim) {
+        if (instant && claim) {
           setSelectedId(claim.claim.id);
           resume.current = { t: claim.window_start_sec ?? 0, play: false };
         }
@@ -62,6 +64,9 @@ export function Workspace({ caseId }: { caseId: string }) {
   }, [caseId, attempt]);
 
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
+
+  // A finished upload becomes a new case tab without reloading the page.
+  const refreshCases = useCallback(() => { listCases().then(setCases).catch(() => {}); }, []);
 
   const results = useMemo(() => data?.results ?? [], [data]);
   const selected = results.find((r) => r.claim.id === selectedId) ?? null;
@@ -190,13 +195,15 @@ export function Workspace({ caseId }: { caseId: string }) {
   const posterPath = results.flatMap((r) => r.evidence_frames)[0];
   const poster = posterPath ? media(posterPath) : undefined;
   // Where the result came from, always visible once shown (cached, which model, when).
+  const uploaded = data?.origin === "upload";
   const provenance = revealed && data
-    ? `Cached analysis · ${data.model} · ${new Date(data.created_at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}`
-    : "Demo · public footage, fictional team-written report";
+    ? `${uploaded ? "Analysis" : "Cached analysis"} · ${data.model} · ${new Date(data.created_at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}`
+    : uploaded ? "Uploaded case" : "Demo · public footage, fictional team-written report";
 
   return (
     <div className="flex min-h-screen flex-col xl:h-screen">
-      <TopBar caseId={caseId} cases={cases} phase={phase} provenance={provenance} onAnalyze={analyze} onHow={() => setHow(true)} />
+      <TopBar caseId={caseId} cases={cases} phase={phase} origin={data?.origin ?? "demo"} provenance={provenance}
+        onAnalyze={analyze} onHow={() => setHow(true)} onCaseReady={refreshCases} />
       <MatterHeader caseId={caseId} fields={report.fields} duration={data?.duration_sec ?? null} phase={phase}
         counts={counts} total={results.length} filter={filter} setFilter={setFilter} />
 
@@ -210,7 +217,8 @@ export function Workspace({ caseId }: { caseId: string }) {
           src={data ? media(overlay ? data.annotated_video_url : data.video_url) : undefined}
           poster={poster}
           onSeek={seek} onTimeUpdate={onTimeUpdate} onLoadedMetadata={onLoadedMetadata}
-          camera={meta.camera} source={meta.source} sourceUrl={meta.sourceUrl} />
+          camera={meta.camera} source={data?.source_title ?? meta.source} sourceUrl={data?.source_url ?? meta.sourceUrl}
+          sourceStartSeconds={data?.source_start_seconds ?? 0} uploaded={uploaded} />
         <LedgerPanel phase={phase} step={step} results={results} selected={revealed ? selected : null} onSelect={select}
           onPlay={play} onSeek={seek} onAnalyze={analyze} model={data?.model ?? ""} createdAt={data?.created_at ?? new Date().toISOString()} error={error} />
       </main>

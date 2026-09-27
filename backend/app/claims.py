@@ -108,11 +108,21 @@ def extract(gemini: Gemini, report_text: str) -> list[Claim]:
 
 
 def check(gemini: Gemini, video: Path, claims: list[Claim], pose_text: str, duration: float,
-          overlay: bool, transcript: Transcript | None) -> list[ClaimCheck]:
+          overlay: bool, transcript: Transcript | None, segment_start: float | None = None,
+          segment_end: float | None = None) -> list[ClaimCheck]:
+    """segment_start/end: this video is only that part of the recording (long clips are checked in windows)."""
     listing = "\n".join(f"{c.id} [{c.claim_type}] {c.text}" for c in claims)
+    windowed = segment_start is not None and segment_end is not None
+    lines = transcript_text(transcript, segment_start, segment_end) if windowed else transcript_text(transcript)
     prompt = CHECK_PROMPT.format(dur=duration, overlay=OVERLAY_NOTE if overlay else "", pose=pose_text,
-                                 claims=listing, transcript=transcript_text(transcript))
-    fps = min(CHECK_FPS, MAX_VIDEO_FRAMES / duration)
+                                 claims=listing, transcript=lines)
+    if windowed:
+        prompt += (f"\nThis is only original-recording seconds {segment_start:.1f} to {segment_end:.1f} "
+                   f"of the {duration:.1f}-second video. Return all window timestamps in ORIGINAL-recording "
+                   "seconds (the t= overlay shows these seconds when present). If a claim's event is not in this window, use "
+                   "insufficient_footage with null window times; other windows are checked separately. "
+                   "Do not call an event inconsistent merely because it is absent from this window.\n")
+    fps = min(CHECK_FPS, MAX_VIDEO_FRAMES / ((segment_end - segment_start) if windowed else duration))
     return gemini.generate([video_part(video, fps), prompt], ClaimChecks, model=CLAIMS_MODEL, system=GUIDE).checks
 
 

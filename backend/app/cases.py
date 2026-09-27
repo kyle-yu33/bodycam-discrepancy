@@ -38,7 +38,7 @@ def _media(case: str, name: str) -> str:
     return f"{MEDIA}/{case}/{name}"
 
 
-def prepare(case: str, src: Path, repose: bool = False) -> tuple[Path, float, list[PoseEvent]]:
+def prepare(case: str, src: Path, repose: bool = False, on_pose=None) -> tuple[Path, float, list[PoseEvent]]:
     out = CASES / case
     out.mkdir(parents=True, exist_ok=True)
     clip = out / "clip.mp4"
@@ -46,7 +46,7 @@ def prepare(case: str, src: Path, repose: bool = False) -> tuple[Path, float, li
         video.normalize(src, clip)
     pose_json = out / "pose.json"
     if repose or not pose_json.exists():
-        events, raw = pose.analyze(clip, out)
+        events, raw = pose.analyze(clip, out, on_frame=on_pose)
         video.mux_audio(raw, clip, out / "annotated.mp4")
         raw.unlink(missing_ok=True)
         pose_json.write_text(json.dumps([e.model_dump() for e in events], indent=2), encoding="utf-8")
@@ -126,6 +126,47 @@ def _disagreements(g: Gemini, claims: list[Claim], checks: dict[str, ClaimCheck]
     return ids
 
 
+def _check_recording(g: Gemini, source: Path, out: Path, claims: list[Claim],
+                     events: list[PoseEvent], duration: float, overlay: bool, step,
+                     transcript: Transcript | None = None) -> dict[str, ClaimCheck]:
+    """Check the full timeline in Gemini-sized windows; keep the best located check per claim."""
+    windows = video.windows(duration, size=60, overlap=5)
+    best: dict[str, ClaimCheck] = {}
+    claim_ids = {claim.id for claim in claims}
+    rank = {"insufficient_footage": 0, "outside_assessment": 1,
+            "potential_inconsistency": 2, "consistent": 3}
+    for i, window in enumerate(windows):
+        model_window = out / f"model_window_{i:04d}.mp4"
+        if not model_window.exists():
+            video.for_model_window(source, model_window, window.start_sec, window.end_sec)
+        nearby = [event for event in events
+                  if event.start_sec <= window.end_sec and event.end_sec >= window.start_sec]
+        checks = ck.check(g, model_window, claims, pose.summarize(nearby), duration, overlay,
+                          transcript=transcript, segment_start=window.start_sec, segment_end=window.end_sec)
+        for check in checks:
+            if check.claim_id not in claim_ids:
+                continue
+            current = check.model_copy()
+            s, e = current.window_start_sec, current.window_end_sec
+            if s is not None and e is not None:
+                if (s < window.start_sec - 1 or e > window.end_sec + 1) and \
+                        0 <= s <= window.end_sec - window.start_sec + 1 and \
+                        0 <= e <= window.end_sec - window.start_sec + 1:
+                    s, e = s + window.start_sec, e + window.start_sec
+                if s < window.start_sec - 1 or e > window.end_sec + 1 or e < s:
+                    current.status = "insufficient_footage"
+                    current.window_start_sec = current.window_end_sec = None
+                else:
+                    current.window_start_sec, current.window_end_sec = s, e
+            elif current.status in ("consistent", "potential_inconsistency"):
+                current.status = "insufficient_footage"
+            previous = best.get(current.claim_id)
+            if previous is None or rank[current.status] > rank[previous.status]:
+                best[current.claim_id] = current
+        step("Checking each claim against the footage", 0.6 + 0.19 * (i + 1) / len(windows))
+    return best
+
+
 def _finish(g: Gemini, case: str, clip: Path, dur: float, claim: Claim, chk: ClaimCheck | None,
             events: list[PoseEvent], transcript: Transcript | None, log, recheck: bool = False) -> ClaimResult:
     """recheck: the agreement check found this claim's observation and status disagree."""
@@ -175,32 +216,52 @@ def _finish(g: Gemini, case: str, clip: Path, dur: float, claim: Claim, chk: Cla
     return r
 
 
-def run(case: str, src: Path, report_text: str, repose: bool = False, reextract: bool = False, log=print) -> CaseResult:
+def run(case: str, src: Path, report_text: str, repose: bool = False, reextract: bool = False, log=print,
+        progress=None, origin: str = "demo", source_url: str | None = None,
+        source_title: str | None = None, source_start_seconds: float = 0) -> CaseResult:
+    """progress(stage, fraction) is called as each step starts and after every pose frame; the upload API shows it
+    to the user, and may raise to stop the run."""
+    step = progress or (lambda stage, fraction: None)
     out = CASES / case
     log(f"[{case}] preparing clip and pose")
-    clip, dur, events = prepare(case, src, repose)
+    step("Preparing footage and tracking body pose", 0.05)
+    clip, dur, events = prepare(case, src, repose,
+                                on_pose=lambda f: step("Preparing footage and tracking body pose", 0.05 + 0.33 * f))
     if repose:
         (out / "transcript.json").unlink(missing_ok=True)
+    step("Transcribing audio", 0.4)
     _transcript(clip, out, log)
     overlay = os.getenv("GEMINI_VIDEO", "annotated") == "annotated"
+    source_video = out / "annotated.mp4" if overlay else clip
+    # Whole clip, fitted under the inline cap: the check for clips up to 90 s, and speaker roles for every clip.
     model_video = out / f"model_{'annotated' if overlay else 'clean'}.mp4"
     if not model_video.exists():
-        video.for_model(out / "annotated.mp4" if overlay else clip, model_video)
+        video.for_model(source_video, model_video)
 
     g = Gemini()
     try:
+        transcript = _speakers(g, model_video, out, log)
+        step("Splitting the report into claims", 0.5)
         claims = _claims(g, out, report_text, reextract)
         log(f"[{case}] {len(claims)} claims; checking with {ck.CLAIMS_MODEL} at {ck.CHECK_FPS} fps "
             f"({'pose overlay' if overlay else 'clean video'})")
-        transcript = _speakers(g, model_video, out, log)
-        checks = {c.claim_id: c for c in ck.check(g, model_video, claims, pose.summarize(events), dur, overlay, transcript)}
+        step("Checking each claim against the footage", 0.6)
+        if dur <= 90:
+            checks = {c.claim_id: c for c in ck.check(g, model_video, claims, pose.summarize(events), dur, overlay,
+                                                      transcript)}
+        else:
+            checks = _check_recording(g, source_video, out, claims, events, dur, overlay, step, transcript)
         disagree = _disagreements(g, claims, checks, log)
-        results = [_finish(g, case, clip, dur, c, checks.get(c.id), events, transcript, log, c.id in disagree)
-                   for c in claims]
+        results = []
+        for i, c in enumerate(claims):
+            step("Re-checking flags and building the ledger", 0.8 + 0.2 * i / max(len(claims), 1))
+            results.append(_finish(g, case, clip, dur, c, checks.get(c.id), events, transcript, log, c.id in disagree))
     finally:
         g.close()
 
-    res = CaseResult(case=case, model=ck.CLAIMS_MODEL, created_at=datetime.now(timezone.utc).isoformat(),
+    res = CaseResult(case=case, origin=origin, source_url=source_url, source_title=source_title,
+                     source_start_seconds=source_start_seconds,
+                     model=ck.CLAIMS_MODEL, created_at=datetime.now(timezone.utc).isoformat(),
                      report_text=report_text, duration_sec=dur, video_url=_media(case, "clip.mp4"),
                      annotated_video_url=_media(case, "annotated.mp4"), results=results, pose_events=events)
     (out / "result.json").write_text(res.model_dump_json(indent=2), encoding="utf-8")
