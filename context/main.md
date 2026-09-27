@@ -1,10 +1,10 @@
-# EvidenceLens — Canonical Project Brief
+# evidently — Canonical Project Brief
 
 **Hackathon:** Hack the Hill III · **Primary fit:** Civic Tech · **Team:** Artem, Lucas, Ayan, Kyle
 
 ## One-sentence solution
 
-**EvidenceLens turns a written incident narrative and bodycam-style footage into a claim-by-claim evidence map, helping defence-side legal teams find the moments that deserve close human review.**
+**evidently turns a written incident narrative and bodycam-style footage into a claim-by-claim evidence map, helping defence-side legal teams find the moments that deserve close human review.**
 
 ## The problem
 
@@ -14,7 +14,7 @@ Criminal-defence and legal-aid teams can receive hours of body-worn-camera foota
 
 ## The product
 
-EvidenceLens reads a report, identifies atomic claims, determines which claims are visually assessable, links them to the relevant video window, and produces a transparent **claim–evidence ledger**.
+evidently reads a report, identifies atomic claims, determines which claims are visually assessable, links them to the relevant video window, and produces a transparent **claim–evidence ledger**.
 
 Each ledger item contains:
 
@@ -28,7 +28,7 @@ Each ledger item contains:
 
 ## What it is / is not
 
-| EvidenceLens is | EvidenceLens is not |
+| evidently is | evidently is not |
 |---|---|
 | A defence-side evidence-review copilot | A police lie detector |
 | A way to prioritize lawyer attention | A system that decides guilt or legal liability |
@@ -49,7 +49,7 @@ Absence from footage is **not** proof that an event did not happen.
 
 ## Differentiation
 
-Existing legal-tech products validate the problem. JusticeText publicly supports bodycam review, searchable transcripts, document analysis, timeline creation, cross-referencing, and AI-assisted inconsistency work. EvidenceLens must not claim it invented AI report/video comparison.
+Existing legal-tech products validate the problem. JusticeText publicly supports bodycam review, searchable transcripts, document analysis, timeline creation, cross-referencing, and AI-assisted inconsistency work. evidently must not claim it invented AI report/video comparison.
 
 The focused wedge is:
 

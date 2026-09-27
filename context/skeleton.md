@@ -70,4 +70,4 @@ A judge can:
 
 ## Existing Claude Code prompt
 
-`/Users/lucasliu/Desktop/Claude_Code_Prompt_EvidenceLens_Skeleton.md` contains a detailed implementation prompt based on this document set. It instructs Claude Code to build the working skeleton and run verification.
+`/Users/lucasliu/Desktop/Claude_Code_Prompt_evidently_Skeleton.md` contains a detailed implementation prompt based on this document set. It instructs Claude Code to build the working skeleton and run verification.

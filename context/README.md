@@ -1,4 +1,4 @@
-# EvidenceLens — Project Context
+# evidently — Project Context
 
 This folder is the team’s concise source of truth for the Hack the Hill project. It consolidates the decisions, research, scope, architecture, safety boundaries, and demo direction agreed so far.
 

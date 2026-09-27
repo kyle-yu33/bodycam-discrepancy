@@ -8,7 +8,7 @@ Build a calm, evidence-review workspace. The page should feel like a legal revie
 
 ### Header
 
-- `EvidenceLens` name/logo;
+- `evidently` name/logo;
 - badge: `Demo case: public footage, team-written report`;
 - trust label: `Human review required`;
 - `Analyze case` button;

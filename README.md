@@ -1,8 +1,8 @@
-# EvidenceLens (bodycam-discrepancy)
+# evidently (bodycam-discrepancy)
 
 **Hack the Hill III · Civic Tech · Team: Artem, Lucas, Ayan, Kyle**
 
-EvidenceLens turns a written incident narrative and bodycam-style footage into a claim-by-claim
+evidently turns a written incident narrative and bodycam-style footage into a claim-by-claim
 evidence map, helping defence-side legal teams find the moments that deserve close human review.
 
 > **No claim without a source. No source without a timestamp. No certainty when footage is unclear.**
