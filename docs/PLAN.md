@@ -69,8 +69,11 @@ python -m app.cases sfst2               # analyze + score; --repose / --reextrac
 uvicorn app.main:app --port 8000        # then open http://localhost:8000/cases/sfst2
 ```
 
+Default model: `gemini-3.8-flash`, thinking level `high`, video media resolution `high`, temperature 0
+(`app/gemini.py`). The reviewer rules live in `app/review_guide.md`, sent as the system instruction for every
+check and second look; edit that file to change how the model judges footage.
 Tuning knobs (env): `CLAIMS_MODEL`, `CHECK_FPS` (default 2), `SECOND_LOOK_FPS` (5),
-`GEMINI_VIDEO=annotated|clean`, `POSE_MODEL`, `POSE_FPS` (10), `POSE_IMGSZ` (640).
+`GEMINI_TEMPERATURE` (0), `GEMINI_VIDEO=annotated|clean`, `POSE_MODEL`, `POSE_FPS` (10), `POSE_IMGSZ` (640).
 Tests (repo root): `python -m unittest backend/tests/test_claims.py backend/tests/test_pipeline.py`.
 
 ## 4. Where things stand
@@ -82,7 +85,7 @@ Tests (repo root): `python -m unittest backend/tests/test_claims.py backend/test
 | YOLO pose decision | Done (`main`, `context/decisions.md`) |
 | Claims pipeline, pose, scoring, `/cases` API, 19 tests | Working on real Gemini (branch `claims-pipeline`) |
 | Model choice | Comparison in progress |
-| Timestamps on the 80 s night clip | Not solved: Gemini 2.5 Flash places the walk ~15 s early |
+| Timestamps on the 80 s night clip | Solved: the answer key was ~13 s late; the timed transcript now anchors the checks |
 | Review UI (claims ledger) | Not started; current frontend shows the old event API |
 | Demo script, backup recording | Not started |
 
@@ -108,11 +111,55 @@ Fixes that mattered:
 | gemini-3-flash-preview | 2/3, 0 false flags | 2/4, 0 false flags | Correct |
 | gemini-2.5-pro | 2/3, 0 false flags | 1/4, 0 false flags | Correct; very cautious |
 | gemini-3.1-pro-preview | 2/3, 1 "false flag" (see below) | 3/4, 0 false flags | Walk placed early |
+| gemini-3.8-flash (thinking high), old harness | 0/3, 0 false flags | 2/4, 0 false flags | 2 windows off on each clip |
+| **gemini-3.8-flash, current harness** | **2/3, 2/3, 2/3; 0 false flags; 9/12 exact every run** | **3/4, 2/4, 3/4; 0 false flags; 10-11/12 exact** | Correct (0 windows off) |
+
+"Walk placed early" above was the answer key's error, not the models': the subject counts his steps aloud from
+31.1 s ("one") to 52.6 s ("nine"), and the key had the walk at 44-55 s. Windows are now re-timed from the
+transcript.
+
+Harness changes on 3.8 Flash (2026-09-26), 3 runs per clip per change, each aimed at a miss read in the
+model's own observations:
+1. Extraction typed "on two of six attempts, used the wrong hand" and "lack of smooth pursuit" as
+   subjective, which forces *outside*. Counts of observable actions and eye observations are now visual.
+2. The timed ElevenLabs transcript goes into the check and second look; counting aloud and called-out
+   "left"/"right" place each step and attempt. This fixed the sfst1 timing.
+3. `app/review_guide.md` as the system instruction: statuses, observe-don't-infer rules, and fixes for
+   specific misreadings (an arm crossing the face is not a head movement, the camera wearer's own face is never
+   in view, commands are not evidence of how much happened, out-of-frame body parts are never inferred), plus
+   what each sobriety test looks like.
+4. (Tried, then removed: three checks with a majority vote. The independent second look already guards
+   every flag, and one check is enough.)
+5. Second-look windows are at least 20 s, so the person's own rhythm is visible ("stopped after the fourth
+   step" was being confirmed on the normal pause between heel-to-toe steps).
+6. Video media resolution `high`: at the default, the model read a head held tilted back as "lowered"
+   3/3 times; at `high` it read it correctly 3/3 (about 3.5x the video tokens). 720p vs 480p video made no
+   difference on the night clip, so model videos stay 480p.
+7. Speaker roles: each diarized label (speaker_0, ...) is named officer / officer wearing the camera /
+   subject / other / unknown by one Gemini call that watches the clip against the timed transcript, quoting its
+   evidence (`app/speakers.py`, saved as `speakers` in `transcript.json`). Loudness can't do it: the subject is
+   as loud as the camera wearer on sfst2. 3/3 runs per clip gave the same, correct roles.
+8. The shown observation always agrees with the status. The guide makes the observation the reason for the
+   status; a text-only agreement check then reads every observation next to its status, and any claim where they
+   don't fit goes to the second look like a flag does (if that call fails, every claim does). The second look
+   answers with a finding (incompatible_with_claim / matches_claim / cannot_tell) that sets the status, and its
+   own text is then shown; the replaced text is kept in `first_pass_observation`. Second-look observations cite
+   video seconds, not clip seconds.
+9. Built for new clips, not tuned to these two: the guide states principles (small distances can't be measured,
+   the reporting officer is not always the camera wearer, test procedure never proves what happened); the video
+   sent to Gemini is re-encoded to fit the 15 MB inline cap and long clips are sampled at a lower fps to stay
+   within the token budget. The planted claims include some no footage could settle (2 inches of sway, feet
+   at night), so accuracy on these keys understates the system; new cases should plant resolvable claims.
+Temperature 0 vs 1 made no measurable difference (3 runs each); 0 is kept because 1 accepted "raised both arms
+more than six inches" as consistent, which the footage doesn't clearly show.
+
+Every remaining miss is a label the team should settle, not a model error: sfst2 feet together (feet are never
+in frame), front-to-back sway (can't be resolved), flashlight (goes into his mouth); sfst1 arms raised (his arms
+do drift from his sides and the officer says "hands down" twice) and stepping off the line (night, walking away).
 
 So one good run proves nothing. Plan: choose the model on several runs, then flag a claim only if a
 majority of 3 checks flag it and the second look confirms, then freeze a perfect run as the demo
-result. The demo never depends on a live model call. Current front-runner: gemini-3-flash-preview
-(no false flags, correct timing, cheaper than Pro).
+result. The demo never depends on a live model call. Current model: gemini-3.8-flash with the harness above.
 
 **The models found three problems in our own answer key and report (not fixed yet; team call):**
 - "I checked SUBJECT B's eyes with my flashlight": the flashlight goes into his mouth (frame at
@@ -124,12 +171,10 @@ result. The demo never depends on a live model call. Current front-runner: gemin
 ## 6. Remaining work
 
 **A. Accuracy (backend)**
-1. Finish the model comparison; pick the model with zero false flags and the best timestamps.
-2. Fix sfst1 timestamps: stronger model, higher `CHECK_FPS`, or windows from pose (it knows when the
-   subject is walking).
-3. Majority voting over 3 checks.
-4. A human confirms both answer keys with audio and deletes the `DRAFT` field.
-5. Trim each report to 5-7 claims (`context/mvp.md`).
+1. ~~Model comparison~~, ~~sfst1 timestamps~~, ~~majority voting~~: done (section 5).
+2. A human confirms both answer keys with audio, settles the disputed labels listed in section 5 (sfst1 arms
+   raised is new: the officer says "hands down" twice), and deletes the `DRAFT` field.
+3. Trim each report to 5-7 claims (`context/mvp.md`).
 
 **B. Review UI (frontend): the biggest piece left, can start now against the cached sfst2 result**
 - Three panels per `context/frontend.md`: claims | video | ledger.

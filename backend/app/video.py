@@ -23,13 +23,29 @@ def duration(path: Path) -> float:
 def normalize(src: Path, dst: Path):
     run(["ffmpeg", "-y", "-i", str(src), "-map", "0:v:0", "-map", "0:a:0?", "-vf", "scale=-2:'min(720,ih)'", *ENCODE, str(dst)])
 
-def cut(src: Path, dst: Path, start: float, end: float, height: int | None = None):
+MODEL_MAX_BYTES = 14 * 1024 * 1024   # Vertex AI takes video inline only, capped at 15 MB; keep a margin
+
+def cut(src: Path, dst: Path, start: float, end: float, height: int | None = None, max_bytes: int | None = None):
     scale = ["-vf", f"scale=-2:'min({height},ih)'"] if height else []
     run(["ffmpeg", "-y", "-ss", str(start), "-i", str(src), "-t", str(end-start), "-map", "0:v:0", "-map", "0:a:0?", *scale, *ENCODE, str(dst)])
+    if max_bytes:
+        fit(dst, max_bytes)
 
 def for_model(src: Path, dst: Path, height: int = 480):
-    """Smaller copy for Gemini: Vertex AI takes video inline only (15 MB cap)."""
+    """Smaller copy for Gemini, re-encoded at a lower bitrate if a long clip would pass the inline cap."""
     run(["ffmpeg", "-y", "-i", str(src), "-map", "0:v:0", "-map", "0:a:0?", "-vf", f"scale=-2:'min({height},ih)'", *ENCODE, str(dst)])
+    fit(dst, MODEL_MAX_BYTES)
+
+def fit(path: Path, max_bytes: int):
+    """Re-encode in place at the video bitrate that fits max_bytes (10% margin, 64 kb/s audio)."""
+    if path.stat().st_size <= max_bytes:
+        return
+    kbps = max(100, int(max_bytes * 8 * 0.9 / duration(path) / 1000) - 64)
+    tmp = path.with_name(path.stem + ".fit" + path.suffix)
+    run(["ffmpeg", "-y", "-i", str(path), "-map", "0:v:0", "-map", "0:a:0?", "-c:v", "libx264", "-preset", "veryfast",
+         "-b:v", f"{kbps}k", "-maxrate", f"{kbps}k", "-bufsize", f"{2 * kbps}k", "-pix_fmt", "yuv420p",
+         "-c:a", "aac", "-b:a", "64k", "-movflags", "+faststart", str(tmp)])
+    tmp.replace(path)
 
 def mux_audio(silent: Path, with_audio: Path, dst: Path):
     """OpenCV writes mp4v video without audio; re-encode to H.264 and copy the audio back in."""

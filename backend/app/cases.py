@@ -8,7 +8,8 @@ CLI (from backend/):
   python -m app.cases sfst2 --repose         # redo normalize + pose (+ transcript)
   python -m app.cases sfst2 --reextract      # redo claim extraction
 Env: CLAIMS_MODEL, CHECK_FPS, SECOND_LOOK_FPS, GEMINI_VIDEO=annotated|clean, POSE_MODEL, POSE_FPS,
-ELEVENLABS_API_KEY (optional: writes transcript.json with word timestamps; skipped without it).
+GEMINI_TEMPERATURE, ELEVENLABS_API_KEY (optional: writes transcript.json with word timestamps, which the checks
+use for timing; skipped without it).
 Scores against data/ground_truth/<case>.json when it exists (see app.evaluate).
 """
 import json
@@ -21,16 +22,16 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")  # before .gemini/.claims read the model env vars
 
 from . import claims as ck  # noqa: E402
-from . import pose, video  # noqa: E402
+from . import pose, speakers, video  # noqa: E402
 from .gemini import Gemini  # noqa: E402
 from .ledger import CaseResult, Claim, ClaimCheck, ClaimResult, PoseEvent
-from .transcribe import transcribe
+from .transcribe import Transcript, transcribe
 
 DATA = Path(os.getenv("DATA_DIR", Path(__file__).resolve().parents[2] / "data"))
 CASES = DATA / "cases"
 MEDIA = "/case-media"
 WINDOW_PAD = 2.0      # seconds added around a flagged window for the second look
-MIN_WINDOW = 10.0
+MIN_WINDOW = 20.0     # long enough to show the person's own rhythm around the moment
 
 
 def _media(case: str, name: str) -> str:
@@ -56,7 +57,7 @@ def prepare(case: str, src: Path, repose: bool = False) -> tuple[Path, float, li
 
 
 def _transcript(clip: Path, out: Path, log) -> None:
-    """Timed ElevenLabs transcript saved beside the case; not used by the claim checks yet."""
+    """Timed ElevenLabs transcript saved beside the case; the claim checks use it to place moments in time."""
     path = out / "transcript.json"
     if path.exists():
         return
@@ -72,6 +73,23 @@ def _transcript(clip: Path, out: Path, log) -> None:
     log(f"  transcript: {len(t.segments)} lines -> {path.name}")
 
 
+def _speakers(g: Gemini, model_video: Path, out: Path, log) -> Transcript | None:
+    """Loads the transcript, naming each diarized speaker's role once (saved back into transcript.json)."""
+    path = out / "transcript.json"
+    if not path.exists():
+        return None
+    t = Transcript.model_validate_json(path.read_text(encoding="utf-8"))
+    if t.segments and not t.speakers:
+        try:
+            t.speakers = speakers.assign(g, model_video, t)
+        except Exception as e:  # raw labels still give the checks their timing
+            log(f"  speaker roles failed: {e}")
+            return t
+        path.write_text(t.model_dump_json(indent=2), encoding="utf-8")
+        log("  speakers: " + ", ".join(f"{k}={speakers.who(t, k)}" for k in t.speakers))
+    return t
+
+
 def _claims(g: Gemini, out: Path, report_text: str, reextract: bool) -> list[Claim]:
     path = out / "claims.json"
     if not reextract and path.exists():
@@ -84,8 +102,33 @@ def _claims(g: Gemini, out: Path, report_text: str, reextract: bool) -> list[Cla
     return claims
 
 
+FINDING_STATUS = {"incompatible_with_claim": "potential_inconsistency", "matches_claim": "consistent",
+                  "cannot_tell": "insufficient_footage"}
+
+
+def _settle(r: ClaimResult, status: str, observation: str, recheck: bool) -> None:
+    """Applies a re-check. When the status changes, or the first text disagreed with its status, the shown
+    observation becomes the re-check's own, which states the reason for its finding; the first text is kept."""
+    if status != r.status or recheck:
+        r.first_pass_observation, r.observation = r.observation, observation
+    r.downgraded = r.status == "potential_inconsistency" and status != r.status
+    r.status = status
+
+
+def _disagreements(g: Gemini, claims: list[Claim], checks: dict[str, ClaimCheck], log) -> set[str]:
+    try:
+        ids = ck.disagreements(g, claims, checks)
+    except Exception as e:  # can't verify the texts, so every checkable claim gets the second look instead
+        log(f"  agreement check failed ({e}); re-checking every claim")
+        return {c.id for c in claims if c.claim_type != "subjective_or_legal"}
+    if ids:
+        log(f"  observation and status disagree on {', '.join(sorted(ids))}: re-checking")
+    return ids
+
+
 def _finish(g: Gemini, case: str, clip: Path, dur: float, claim: Claim, chk: ClaimCheck | None,
-            events: list[PoseEvent], log) -> ClaimResult:
+            events: list[PoseEvent], transcript: Transcript | None, log, recheck: bool = False) -> ClaimResult:
+    """recheck: the agreement check found this claim's observation and status disagree."""
     out = CASES / case
     if chk is None:
         r = ClaimResult(claim=claim, status="insufficient_footage", observation="The model returned no check for this claim.")
@@ -102,23 +145,23 @@ def _finish(g: Gemini, case: str, clip: Path, dur: float, claim: Claim, chk: Cla
     if claim.claim_type == "subjective_or_legal":
         r.status = "outside_assessment"
 
-    # Every flag gets an independent second look at a clean, narrow window before it's shown.
-    if r.status == "potential_inconsistency":
+    # Every flag, and every claim whose observation disagreed with its status, gets an independent second look at a
+    # clean, narrow window. Its finding sets the status, so the shown text and the status always agree.
+    if r.status == "potential_inconsistency" or (recheck and r.status != "outside_assessment"):
         if r.window_start_sec is None:
-            r.status, r.downgraded = "insufficient_footage", True
-            r.second_look = "No footage window was given, so the flag could not be re-checked."
+            r.second_look = "No footage window was given, so this could not be re-checked."
+            _settle(r, "insufficient_footage", r.second_look, recheck)
         else:
             s, e = max(r.window_start_sec - WINDOW_PAD, 0.0), min(r.window_end_sec + WINDOW_PAD, dur)
             if e - s < MIN_WINDOW:
                 mid = (s + e) / 2
                 s, e = max(0.0, mid - MIN_WINDOW / 2), min(dur, mid + MIN_WINDOW / 2)
             win = out / f"window_{claim.id}.mp4"
-            video.cut(clip, win, s, e, height=480)
-            look = ck.second_look(g, win, claim, s, e, r.window_start_sec, r.window_end_sec)
+            video.cut(clip, win, s, e, height=480, max_bytes=video.MODEL_MAX_BYTES)
+            look = ck.second_look(g, win, claim, s, e, r.window_start_sec, r.window_end_sec, transcript)
             r.second_look = look.observation
-            log(f"  second look {claim.id} {s:.0f}-{e:.0f}s: {'confirmed' if look.confirmed else 'NOT confirmed'}")
-            if not look.confirmed:
-                r.status, r.downgraded = "insufficient_footage", True
+            log(f"  second look {claim.id} {s:.0f}-{e:.0f}s{' (disagreement)' if recheck else ''}: {look.finding}")
+            _settle(r, FINDING_STATUS[look.finding], look.observation, recheck)
 
     if r.window_start_sec is not None:
         s, e = r.window_start_sec, r.window_end_sec
@@ -149,8 +192,11 @@ def run(case: str, src: Path, report_text: str, repose: bool = False, reextract:
         claims = _claims(g, out, report_text, reextract)
         log(f"[{case}] {len(claims)} claims; checking with {ck.CLAIMS_MODEL} at {ck.CHECK_FPS} fps "
             f"({'pose overlay' if overlay else 'clean video'})")
-        checks = {c.claim_id: c for c in ck.check(g, model_video, claims, pose.summarize(events), dur, overlay)}
-        results = [_finish(g, case, clip, dur, c, checks.get(c.id), events, log) for c in claims]
+        transcript = _speakers(g, model_video, out, log)
+        checks = {c.claim_id: c for c in ck.check(g, model_video, claims, pose.summarize(events), dur, overlay, transcript)}
+        disagree = _disagreements(g, claims, checks, log)
+        results = [_finish(g, case, clip, dur, c, checks.get(c.id), events, transcript, log, c.id in disagree)
+                   for c in claims]
     finally:
         g.close()
 

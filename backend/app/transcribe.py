@@ -36,10 +36,17 @@ class Segment(BaseModel):
     text: str
     words: list[Word]
 
+class SpeakerRole(BaseModel):
+    """Who a diarized label is; filled in by app.speakers after transcription."""
+    role: Literal["officer", "subject", "other", "unknown"]
+    camera_wearer: bool = False
+    evidence: str = ""
+
 class Transcript(BaseModel):
     language_code: str | None
     text: str
     segments: list[Segment]
+    speakers: dict[str, SpeakerRole] = {}   # diarized label -> role; empty until app.speakers runs
 
 def extract_audio(src: Path, dst: Path):
     # Mono 16 kHz AAC keeps uploads small (~1 MB/min) without hurting recognition.
