@@ -1,27 +1,24 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { CaseResult, CaseSummary, ClaimResult, Status } from "@/lib/ledger";
-import { getCase, listCases, media } from "@/lib/ledger";
+import type { CaseResult, ClaimResult, Status } from "@/lib/ledger";
+import { getCase, media } from "@/lib/ledger";
 import { STATUS_ORDER, caseMeta, parseReport } from "@/lib/present";
-import { HowItWorks, MatterHeader, STEPS, TopBar, type Phase } from "./Chrome";
+import { HowItWorks, MatterHeader, TopBar, type Phase } from "./Chrome";
 import { EvidenceViewer } from "./EvidenceViewer";
 import { LedgerPanel } from "./LedgerPanel";
 import { ReportPanel, type ReportView } from "./ReportPanel";
 
-const STEP_MS = 850;
 const LEAD_IN = 1;    // seconds of context before a window when jumping to it
 const LEAD_OUT = 0.75;
 
 export function Workspace({ caseId }: { caseId: string }) {
   const [data, setData] = useState<CaseResult | null>(null);
-  const [cases, setCases] = useState<CaseSummary[]>([]);
   const [phase, setPhase] = useState<Phase>("loading");
   const [error, setError] = useState("");
-  const [step, setStep] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [overlay, setOverlay] = useState(false);
   const [filter, setFilter] = useState<Status | null>(null);
-  const [view, setView] = useState<ReportView>("report");
+  const [view, setView] = useState<ReportView>("claims");
   const [how, setHow] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -29,44 +26,17 @@ export function Workspace({ caseId }: { caseId: string }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const stopAt = useRef<number | null>(null);
   const resume = useRef<{ t: number; play: boolean } | null>(null);
-  const timers = useRef<number[]>([]);
-  const autoRun = useRef(false); // ?analyze=1: start the replay on load (for recording the demo)
-
-  // Load the cached result. ?instant=1 skips the analysis replay (handy for development and recordings).
   useEffect(() => {
     let alive = true;
-    Promise.all([getCase(caseId), listCases().catch(() => [] as CaseSummary[])])
-      .then(([d, cs]) => {
-        if (!alive) return;
-        setData(d);
-        setCases(cs);
-        setError("");
-        const q = new URLSearchParams(window.location.search);
-        // Uploaded cases were just analyzed for real, so there is no cached replay to show.
-        const instant = q.has("instant") || d.origin === "upload";
-        setPhase(instant ? "loaded" : "ready");
-        if (q.has("expand")) setExpanded(true);
-        if (q.has("how")) setHow(true);
-        autoRun.current = q.has("analyze") && !instant;
-        // ?instant=1&claim=c7 opens straight onto one claim (recordings, fallback during the demo).
-        const claim = d.results.find((r) => r.claim.id === q.get("claim"));
-        if (instant && claim) {
-          setSelectedId(claim.claim.id);
-          resume.current = { t: claim.window_start_sec ?? 0, play: false };
-        }
-      })
-      .catch((e: Error) => {
-        if (!alive) return;
-        setError(e.message);
-        setPhase("failed");
-      });
+    getCase(caseId).then((d) => {
+      if (!alive) return;
+      setData(d); setError(""); setPhase("loaded");
+      const q = new URLSearchParams(window.location.search);
+      const claim = d.results.find((r) => r.claim.id === q.get("claim"));
+      if (claim) { setSelectedId(claim.claim.id); resume.current = { t: claim.window_start_sec ?? 0, play: false }; }
+    }).catch((e: Error) => { if (alive) { setError(e.message); setPhase("failed"); } });
     return () => { alive = false; };
   }, [caseId, attempt]);
-
-  useEffect(() => () => timers.current.forEach(clearTimeout), []);
-
-  // A finished upload becomes a new case tab without reloading the page.
-  const refreshCases = useCallback(() => { listCases().then(setCases).catch(() => {}); }, []);
 
   const results = useMemo(() => data?.results ?? [], [data]);
   const selected = results.find((r) => r.claim.id === selectedId) ?? null;
@@ -77,30 +47,7 @@ export function Workspace({ caseId }: { caseId: string }) {
     return c;
   }, [results]);
 
-  const analyze = useCallback(() => {
-    if (!data) {
-      setPhase("loading");
-      setAttempt((a) => a + 1);
-      return;
-    }
-    timers.current.forEach(clearTimeout);
-    setSelectedId(null);
-    setFilter(null);
-    setView("report");
-    setStep(0);
-    setPhase("analyzing");
-    timers.current = [
-      ...STEPS.map((_, i) => window.setTimeout(() => setStep(i + 1), (i + 1) * STEP_MS)),
-      window.setTimeout(() => setPhase("loaded"), STEPS.length * STEP_MS + 250),
-    ];
-  }, [data]);
-
-  useEffect(() => {
-    if (!autoRun.current || phase !== "ready") return;
-    autoRun.current = false;
-    const id = window.setTimeout(analyze, 600);
-    return () => clearTimeout(id);
-  }, [phase, analyze]);
+  const analyze = useCallback(() => { setPhase("loading"); setAttempt((a) => a + 1); }, []);
 
   const seek = useCallback((t: number) => {
     const v = videoRef.current;
@@ -151,6 +98,7 @@ export function Workspace({ caseId }: { caseId: string }) {
   // Claims (after analysis): ↑/↓ or k/j move, P plays the moment, Esc back to findings.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (document.querySelector("dialog[open]")) return;
       if (!data || e.metaKey || e.ctrlKey || e.altKey) return;
       const el = e.target as HTMLElement;
       if (["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName)) return;
@@ -201,17 +149,17 @@ export function Workspace({ caseId }: { caseId: string }) {
     : uploaded ? "Uploaded case" : "Demo · public footage, fictional team-written report";
 
   return (
-    <div className="flex min-h-screen flex-col xl:h-screen">
-      <TopBar caseId={caseId} cases={cases} phase={phase} origin={data?.origin ?? "demo"} provenance={provenance}
-        onAnalyze={analyze} onHow={() => setHow(true)} onCaseReady={refreshCases} />
+    <div className="flex min-h-screen flex-col">
+      <TopBar caseId={caseId} onHow={() => setHow(true)} />
       <MatterHeader caseId={caseId} fields={report.fields} duration={data?.duration_sec ?? null} phase={phase}
         counts={counts} total={results.length} filter={filter} setFilter={setFilter} />
 
-      <main className={`relative z-0 grid flex-1 gap-4 px-6 pb-6 xl:min-h-0 ${expanded ? "xl:grid-cols-[minmax(640px,2.7fr)_minmax(340px,1fr)]" : "xl:grid-cols-[minmax(280px,0.8fr)_minmax(580px,2.2fr)_minmax(330px,0.95fr)]"}`}>
+      <main className={`relative z-0 grid flex-1 gap-4 px-6 pb-6 xl:min-h-0 ${expanded ? "xl:grid-cols-1" : "xl:grid-cols-[minmax(300px,1fr)_minmax(0,2fr)]"}`}>
         {!expanded && (
           <ReportPanel report={report} results={results} revealed={revealed} selectedId={selectedId}
             onSelect={select} filter={filter} view={view} setView={setView} />
         )}
+        <div className="min-w-0 space-y-4">
         <EvidenceViewer results={results} duration={data?.duration_sec || 60} selected={selected} revealed={revealed}
           overlay={overlay} setOverlay={toggleOverlay} expanded={expanded} setExpanded={setExpanded} videoRef={videoRef}
           src={data ? media(overlay ? data.annotated_video_url : data.video_url) : undefined}
@@ -219,8 +167,10 @@ export function Workspace({ caseId }: { caseId: string }) {
           onSeek={seek} onTimeUpdate={onTimeUpdate} onLoadedMetadata={onLoadedMetadata}
           camera={meta.camera} source={data?.source_title ?? meta.source} sourceUrl={data?.source_url ?? meta.sourceUrl}
           sourceStartSeconds={data?.source_start_seconds ?? 0} uploaded={uploaded} />
-        <LedgerPanel phase={phase} step={step} results={results} selected={revealed ? selected : null} onSelect={select}
+        <LedgerPanel phase={phase} step={0} results={results} selected={revealed ? selected : null} onSelect={select}
           onPlay={play} onSeek={seek} onAnalyze={analyze} model={data?.model ?? ""} createdAt={data?.created_at ?? new Date().toISOString()} error={error} />
+        <p className="text-xs text-muted">{provenance}</p>
+        </div>
       </main>
 
       <HowItWorks open={how} onClose={() => setHow(false)} />
