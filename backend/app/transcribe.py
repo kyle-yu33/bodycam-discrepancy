@@ -15,6 +15,8 @@ from pathlib import Path
 from typing import Literal
 import httpx
 from pydantic import BaseModel
+from .video import run
+from .runtime import check, pause
 
 URL = "https://api.elevenlabs.io/v1/speech-to-text"
 MODEL = os.getenv("ELEVENLABS_STT_MODEL", "scribe_v2")
@@ -36,17 +38,22 @@ class Segment(BaseModel):
     text: str
     words: list[Word]
 
+class SpeakerRole(BaseModel):
+    """Who a diarized label is; filled in by app.speakers after transcription."""
+    role: Literal["officer", "subject", "other", "unknown"]
+    camera_wearer: bool = False
+    evidence: str = ""
+
 class Transcript(BaseModel):
     language_code: str | None
     text: str
     segments: list[Segment]
+    speakers: dict[str, SpeakerRole] = {}   # diarized label -> role; empty until app.speakers runs
 
 def extract_audio(src: Path, dst: Path):
     # Mono 16 kHz AAC keeps uploads small (~1 MB/min) without hurting recognition.
-    p = subprocess.run(["ffmpeg", "-y", "-i", str(src), "-vn", "-map", "0:a:0", "-ac", "1", "-ar", "16000", "-c:a", "aac", "-b:a", "64k", str(dst)],
-                       capture_output=True, text=True)
-    if p.returncode:
-        raise RuntimeError(f"ffmpeg could not extract audio (does the file have an audio track?): {p.stderr[-800:]}")
+    run(["ffmpeg", "-y", "-i", str(src), "-vn", "-map", "0:a:0", "-ac", "1", "-ar", "16000", "-c:a", "aac", "-b:a", "64k", str(dst)])
+
 
 def request(audio: Path, diarize: bool, language: str | None, num_speakers: int | None) -> dict:
     data = {"model_id": MODEL, "timestamps_granularity": "word", "diarize": str(diarize).lower(), "tag_audio_events": "true"}
@@ -55,11 +62,13 @@ def request(audio: Path, diarize: bool, language: str | None, num_speakers: int 
     if num_speakers:
         data["num_speakers"] = str(num_speakers)
     for attempt in range(3):
+        check()
         with audio.open("rb") as f:
             r = httpx.post(URL, headers={"xi-api-key": os.environ["ELEVENLABS_API_KEY"]}, data=data,
-                           files={"file": (audio.name, f, "audio/mp4")}, timeout=600)
+                           files={"file": (audio.name, f, "audio/mp4")}, timeout=float(os.getenv("API_TIMEOUT_SEC", "60")))
+        check()
         if r.status_code in (429, 500, 502, 503, 504) and attempt < 2:
-            time.sleep(2 ** (attempt + 1))
+            pause(2 ** (attempt + 1))
             continue
         if r.is_error:
             raise RuntimeError(f"ElevenLabs STT failed ({r.status_code}): {r.text[:500]}")

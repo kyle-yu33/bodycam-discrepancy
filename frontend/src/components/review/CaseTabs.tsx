@@ -73,30 +73,31 @@ export function CaseTabs({ caseId, cases }: { caseId: string; cases: CaseSummary
         {tabs.map((c) => {
           const current = c.case === caseId;
           return (
-            <span key={c.case} className={`flex items-center gap-1.5 whitespace-nowrap border-b-2 text-sm transition-colors ${current ? "border-brass font-medium text-ink" : "border-transparent text-muted hover:text-ink"}`}>
-              <Link href={`/cases/${encodeURIComponent(c.case)}`} aria-current={current ? "page" : undefined}>
+            <span key={c.case} className={`flex items-center gap-1.5 whitespace-nowrap border-b-2 text-sm transition-colors ${current ? "border-brass font-medium text-ink" : "border-transparent text-muted hover:border-brass/45 hover:text-ink"}`}>
+              <Link href={`/cases/${encodeURIComponent(c.case)}`} aria-current={current ? "page" : undefined}
+                className="rounded-sm px-0.5 transition-colors hover:text-ink">
                 {caseMeta(c.case).title}
               </Link>
               {c.origin === "upload" && (
                 <button onClick={() => closeTab(c.case)} aria-label={`Close ${c.case} tab`} title="Close tab (the case is kept)"
-                  className="rounded px-1 leading-none text-muted transition-colors hover:bg-sunken hover:text-ink">×</button>
+                  className="rounded px-1 leading-none text-muted transition-colors hover:bg-hairline hover:text-ink">×</button>
               )}
             </span>
           );
         })}
       </nav>
       {hidden.length > 0 && (
-        <div ref={box} className="relative shrink-0">
+        <div ref={box} className="relative z-50 shrink-0">
           <button onClick={() => setMenu((m) => !m)} aria-expanded={menu} aria-haspopup="menu"
-            className="inline-flex h-9 items-center whitespace-nowrap rounded-md px-2.5 text-sm text-muted transition-colors hover:bg-sunken hover:text-ink">
+            className={`inline-flex h-9 items-center whitespace-nowrap rounded-md px-2.5 text-sm transition-colors ${menu ? "bg-hairline text-ink" : "text-muted hover:bg-hairline hover:text-ink"}`}>
             {hidden.length} closed ▾
           </button>
           {menu && (
-            <div role="menu" className="absolute left-0 top-full z-30 mt-2 w-64 rounded-lg border border-hairline bg-raised p-2 shadow-2xl">
+            <div role="menu" className="absolute left-0 top-full z-50 mt-2 w-64 rounded-lg border border-hairline bg-raised p-2 shadow-2xl">
               <p className="px-2 pb-1 pt-0.5 text-xs text-muted">Closed uploads. Open one to bring its tab back.</p>
               {hidden.map((c) => (
                 <button key={c.case} role="menuitem" onClick={() => reopenTab(c.case)}
-                  className="flex w-full items-baseline justify-between gap-3 rounded-md px-2 py-1.5 text-left text-sm text-ink-2 hover:bg-sunken">
+                  className="flex w-full items-baseline justify-between gap-3 rounded-md px-2 py-1.5 text-left text-sm text-ink-2 transition-colors hover:bg-hairline hover:text-ink">
                   <span className="truncate">{caseMeta(c.case).title}</span>
                   <span className="shrink-0 text-xs text-muted">{c.claims} claims</span>
                 </button>

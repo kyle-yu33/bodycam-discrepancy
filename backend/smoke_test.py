@@ -7,17 +7,18 @@ import sys
 from pathlib import Path
 from dotenv import load_dotenv
 from google import genai
-from google.genai import errors
+from google.genai import errors, types
 
 load_dotenv(Path(__file__).resolve().parent / ".env")
-MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
 
 if not os.getenv("GOOGLE_API_KEY"):
     sys.exit("FAIL: GOOGLE_API_KEY is not set in backend/.env")
 
 client = genai.Client(vertexai=True, api_key=os.environ["GOOGLE_API_KEY"])
 try:
-    response = client.models.generate_content(model=MODEL, contents="Reply with exactly: vertex ok")
+    response = client.models.generate_content(model=MODEL, contents="Reply with exactly: vertex ok",
+                                              config=types.GenerateContentConfig(thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel.HIGH)))
 except errors.APIError as exc:
     sys.exit(f"FAIL: {exc.code} {exc.status}: {exc.message}")
 print(f"OK: {MODEL} via Vertex AI")

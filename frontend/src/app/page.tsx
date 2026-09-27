@@ -13,8 +13,8 @@ export const metadata: Metadata = {
   title: "evidently · Check a police report against body-worn camera footage",
 };
 
-// "See an example" replays the analysis of a cached demo case (NEXT_PUBLIC_DEFAULT_CASE, else sfst2).
-const EXAMPLE_HREF = `/cases/${process.env.NEXT_PUBLIC_DEFAULT_CASE ?? "sfst2"}?analyze=1`;
+// "See an example" opens a cached demo case (NEXT_PUBLIC_DEFAULT_CASE, else sfst2).
+const EXAMPLE_HREF = `/cases/${process.env.NEXT_PUBLIC_DEFAULT_CASE ?? "sfst2"}`;
 
 const NAV = "hidden h-9 items-center rounded-md px-3 text-sm text-ink-2 transition-colors hover:bg-sunken hover:text-ink sm:inline-flex";
 const H2 = "mt-4 text-balance font-serif text-[38px] font-medium leading-[1.08] tracking-tight text-ink sm:text-5xl";
@@ -34,6 +34,7 @@ export default function Home() {
     <div className="min-h-screen">
       <SiteHeader>
         <HowItWorksButton className={NAV} />
+        <Link href="/cases" className={NAV}>Cases</Link>
         <Link href={EXAMPLE_HREF} className={NAV}>Example</Link>
         <Link href="/new" className="inline-flex h-10 items-center whitespace-nowrap rounded-lg bg-brand px-4 text-sm font-medium text-white shadow-sm transition hover:bg-brand-hi">
           Upload files

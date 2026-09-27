@@ -21,7 +21,7 @@ REPORT = "FICTIONAL REPORT.\n\nSUBJECT A raised both arms."
 
 
 def fake_run(cases_dir: Path, fail_on: str | None = None):
-    def run(case, src, report_text, log=print, progress=None, origin="demo", source_url=None,
+    def run(case, src, report_text, log=print, progress=None, origin="demo", publish=True, source_url=None,
             source_title=None, source_start_seconds=0):
         if case == "slow":  # long pose step: reports progress until stopped (or 5 s)
             for i in range(500):
@@ -34,7 +34,8 @@ def fake_run(cases_dir: Path, fail_on: str | None = None):
                          source_start_seconds=source_start_seconds, model="test", created_at=datetime.now(timezone.utc).isoformat(),
                          report_text=report_text, duration_sec=5, video_url=f"/case-media/{case}/clip.mp4",
                          annotated_video_url=f"/case-media/{case}/annotated.mp4", results=[], pose_events=[])
-        (cases_dir / case / "result.json").write_text(res.model_dump_json(), encoding="utf-8")
+        if publish:
+            main.save(cases_dir / case / "result.json", res)
         return res
     return run
 
@@ -85,6 +86,18 @@ class CaseUploadTests(unittest.TestCase):
             self.assertEqual(listed["my-clip"]["origin"], "upload")
             self.assertEqual(client.get("/cases/my-clip").json()["origin"], "upload")
 
+    def test_existing_case_summary_is_generated_once_and_cached(self):
+        with TestClient(main.app) as client:
+            self.assertEqual(self.post(client, name="older-case").status_code, 202)
+            self.assertEqual(wait(client, "older-case")["status"], "complete")
+            with patch.object(main.claim_cases, "summarize_result", return_value="The recording provides a view of the encounter. Some details need closer human review.") as summarize:
+                first = client.get("/cases/older-case/summary")
+                second = client.get("/cases/older-case/summary")
+            self.assertEqual(first.status_code, 200)
+            self.assertEqual(second.json(), first.json())
+            self.assertEqual(summarize.call_count, 1)
+            self.assertEqual(client.get("/cases/older-case").json()["summary"], first.json()["text"])
+
     def test_generated_id_and_report_file(self):
         with TestClient(main.app) as client:
             r = self.post(client, report_text="", report=("report.txt", REPORT.encode("utf-8-sig")))
@@ -124,7 +137,7 @@ class CaseUploadTests(unittest.TestCase):
     def test_long_video_check_reaches_later_windows_on_original_timeline(self):
         claim = Claim(id="c1", text="A person fired a gun", claim_type="visual")
         starts = []
-        def check(g, path, claims, pose, duration, overlay, segment_start, segment_end):
+        def check(g, path, claims, pose, duration, overlay, segment_start, segment_end, transcript=None):
             starts.append(segment_start)
             if segment_start < 100:
                 return [ClaimCheck(claim_id="c1", observation="No relevant moment here",
@@ -167,7 +180,7 @@ class CaseUploadTests(unittest.TestCase):
             job = wait(client, "boom")
             self.assertEqual(job["status"], "failed")
             self.assertIn("model unavailable", job["error"])
-            self.assertEqual(client.get("/cases/boom").status_code, 404)
+            self.assertEqual(client.get("/cases/boom").status_code, 409)
             self.assertEqual(self.post(client, name="boom").status_code, 202)
 
     def test_queue_lists_active_jobs_oldest_first(self):

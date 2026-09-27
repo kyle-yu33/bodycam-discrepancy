@@ -31,9 +31,26 @@ class ClaimCheck(BaseModel):
 class ClaimChecks(BaseModel):
     checks: list[ClaimCheck]
 
+class Agreement(BaseModel):
+    claim_id: str
+    reason: str
+    agrees: bool = Field(description="False if the observation describes something that its status doesn't fit")
+
+class Agreements(BaseModel):
+    items: list[Agreement]
+
 class SecondLook(BaseModel):
     observation: str = Field(description="What this window shows, stated neutrally")
-    confirmed: bool = Field(description="True only if the window clearly shows footage incompatible with the claim")
+    finding: Literal["incompatible_with_claim", "matches_claim", "cannot_tell"] = Field(
+        description="What the clip shows about the claim; must agree with the observation")
+
+    @property
+    def confirmed(self) -> bool:
+        """The flag stands only when the clip clearly shows something incompatible with the claim."""
+        return self.finding == "incompatible_with_claim"
+
+class FindingSummary(BaseModel):
+    text: str = Field(description="One general paragraph of about three to five sentences summarizing the findings")
 
 # ---------- Backend-only ----------
 
@@ -51,7 +68,11 @@ class ClaimResult(BaseModel):
     window_end_sec: Optional[float] = None
     person_track_id: Optional[int] = None
     second_look: Optional[str] = None       # the narrow re-check's observation, when one ran
-    downgraded: bool = False                # re-check did not confirm -> insufficient_footage
+    downgraded: bool = False                # a first-pass flag the re-check did not confirm
+    first_pass_observation: Optional[str] = None  # the first pass's text when a re-check replaced it; `observation`
+                                                  # then holds the re-check's, so it always agrees with `status`
+    adjudication: Optional[str] = None      # third look's text, when the first pass and the re-check contradicted
+                                            # each other; it decided the status and is also `observation`
     evidence_frames: list[str] = []         # media URLs relative to the API base
     pose_events: list[PoseEvent] = []       # pose events overlapping the window
 
@@ -64,6 +85,7 @@ class CaseResult(BaseModel):
     model: str
     created_at: str
     report_text: str
+    summary: Optional[str] = None
     duration_sec: float
     video_url: str
     annotated_video_url: str

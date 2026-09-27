@@ -40,7 +40,7 @@ export function RecentCases() {
         const flagged = c.potential_inconsistency;
         return (
           <li key={c.case}>
-            <Link href={`/cases/${encodeURIComponent(c.case)}?instant=1`}
+            <Link href={`/cases/${encodeURIComponent(c.case)}`}
               className="group -mx-3 flex items-center gap-4 rounded-md px-3 py-4 transition-colors hover:bg-surface">
               <div className="min-w-0 flex-1">
                 <p className="truncate font-serif text-lg leading-6 text-ink">{meta.title}</p>

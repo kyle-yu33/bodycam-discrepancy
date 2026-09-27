@@ -1,7 +1,18 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { Logo } from "@/components/review/Chrome";
 import { ShieldCheck } from "@/components/review/Icons";
+
+export function Logo() {
+  return (
+    <svg viewBox="0 0 32 32" className="h-7 w-7" aria-hidden>
+      <rect width="32" height="32" rx="7" className="fill-brand" />
+      <rect x="0.5" y="0.5" width="31" height="31" rx="6.5" fill="none" stroke="rgb(201 164 92 / 0.45)" />
+      <circle cx="14.5" cy="14.5" r="6" fill="none" stroke="#f2ebe3" strokeWidth="2.2" />
+      <path d="M19 19l5.5 5.5" stroke="#f2ebe3" strokeWidth="2.2" strokeLinecap="round" />
+      <path d="M11.8 14.5h5.4" className="stroke-brass" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
 
 /** Top bar for the pages around the review workspace (home, new case): wordmark, where you are, page actions. */
 export function SiteHeader({ context, children }: { context?: string; children?: ReactNode }) {

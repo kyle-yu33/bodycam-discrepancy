@@ -17,3 +17,5 @@ data/analyses/
 data/cases/
 data/hf/
 *.tsbuildinfo
+
+data/.worker.lock

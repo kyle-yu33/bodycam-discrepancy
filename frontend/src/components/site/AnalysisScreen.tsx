@@ -119,7 +119,7 @@ export function AnalysisScreen({ job, onStop, onRetry, children }: {
         </div>
       )}
       {done && (
-        <Link href={`/cases/${encodeURIComponent(job.id)}?instant=1`} className={`mt-6 ${BUTTON_PRIMARY}`}>Open the review</Link>
+        <Link href={`/cases/${encodeURIComponent(job.id)}`} className={`mt-6 ${BUTTON_PRIMARY}`}>Open the review</Link>
       )}
       {children}
     </main>

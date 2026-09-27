@@ -28,3 +28,10 @@ This log records the core decisions that define evidently. Update it when the te
 - What are the final official submission mechanics and track rules for Hack the Hill III?
 
 These are execution questions, not reasons to expand the MVP.
+## 2026-09-27: Harden the existing local Python upload backend
+
+At the user's request, retain the current FastAPI upload/analysis flow and improve its reliability rather than migrate architectures. Use attempt-scoped job controls, a single server lock, atomic JSON persistence, explicit deletion, cooperative cancellation, bounded subprocess/network operations, upload byte limits, and recoverable job history. Keep analysis percentages explicitly estimated and report worker heartbeats separately. The worker remains local and in-memory; restart produces visible interrupted failures. Regression coverage includes stop/re-upload and final-step cancellation races. Existing frontend styling and tab-close behavior are preserved.
+
+## 2026-09-27: Diagnose preparation stalls and OneDrive deletion failures
+
+Observed a job still at 5% after normalization, before pose frames, and multiple failed-deletion directories carrying Windows read-only attributes. Split preparation into explicit stages with FFmpeg timestamp progress, resolve pose weights from the backend directory, and handle read-only files/directories during validated deletion. Keep true sharing/access failures visible. Replace Home's automatic case redirect with a persistent overview and release video playback before deleting the displayed case. Local pose benchmarks did not establish CPU thread oversubscription as the cause, so no speculative thread-count change was retained.

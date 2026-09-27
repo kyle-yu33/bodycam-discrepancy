@@ -85,6 +85,7 @@ function NewCase() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [uploaded, setUploaded] = useState(0); // percent of the video sent
   const [job, setJob] = useState<CaseJob | null>(null);
   const videoInput = useRef<HTMLInputElement>(null);
   const reportInput = useRef<HTMLInputElement>(null);
@@ -118,7 +119,7 @@ function NewCase() {
 
   // Replace, not push: Back from the review shouldn't land on a finished job and bounce forward again.
   useEffect(() => {
-    if (job?.status === "complete") router.replace(`/cases/${encodeURIComponent(job.id)}?instant=1`);
+    if (job?.status === "complete") router.replace(`/cases/${encodeURIComponent(job.id)}`);
   }, [job, router]);
 
   function pickVideo(file: File | null) {
@@ -137,6 +138,11 @@ function NewCase() {
 
   async function attachReport(file: File | null) {
     if (!file) return;
+    if (file.size > 200_000) {
+      setError("The report must be 200 KB or smaller.");
+      return;
+    }
+    setError("");
     setReport((await file.text()).replace(/^﻿/, ""));
     setReportFile(file.name);
     if (reportInput.current) reportInput.current.value = "";
@@ -148,13 +154,14 @@ function NewCase() {
     setError("");
     setNotice("");
     setSubmitting(true);
+    setUploaded(0);
     const form = new FormData();
     if (sourceMode === "upload" && video) form.append("video", video);
     if (sourceMode === "youtube") form.append("youtube_url", youtubeUrl);
     form.append("report_text", report);
     form.append("name", name);
     try {
-      const created = await createCase(form);
+      const created = await createCase(form, setUploaded);
       window.history.replaceState(null, "", `/new?job=${encodeURIComponent(created.id)}`);
       setJob(created);
     } catch (err) {
@@ -298,7 +305,7 @@ function NewCase() {
 
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-2">
             <button type="submit" disabled={!canSubmit} className={BUTTON_PRIMARY}>
-              {submitting ? (sourceMode === "youtube" ? "Importing the video…" : "Uploading…") : "Analyze case"}
+              {submitting ? (sourceMode === "youtube" ? "Importing the video…" : uploaded < 100 ? `Uploading… ${uploaded}%` : "Starting…") : "Analyze case"}
             </button>
             <Link href="/" className="text-sm text-muted transition-colors hover:text-ink">Cancel</Link>
             {missing && !submitting && <span className="text-[13px] text-muted">{missing}</span>}
