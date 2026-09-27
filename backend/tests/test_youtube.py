@@ -1,5 +1,4 @@
 """YouTube imports preserve the full source recording."""
-import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -18,9 +17,9 @@ class YouTubeImportTests(unittest.TestCase):
                 calls.append(command)
                 if len(calls) == 2:
                     (destination / "original.mp4").write_bytes(b"video")
-                return subprocess.CompletedProcess(command, 0, stdout="Source title\n", stderr="")
+                return "Source title\n"
 
-            with patch.object(youtube.subprocess, "run", side_effect=run):
+            with patch.object(youtube, "run", side_effect=run):
                 path, title = youtube.download_video("https://youtu.be/AbR3-Kpzw6k?t=120", destination)
 
             self.assertEqual(path, destination / "original.mp4")

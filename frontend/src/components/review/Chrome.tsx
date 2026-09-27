@@ -36,8 +36,8 @@ export function TopBar({ caseId, cases, phase, origin, provenance, onAnalyze, on
 }) {
   const uploaded = origin === "upload";
   return (
-    <header className="flex h-14 shrink-0 items-center gap-4 border-b border-hairline bg-canvas/70 px-4 backdrop-blur-md sm:gap-6 sm:px-6">
-      <Link href="/" className="flex shrink-0 items-center gap-2.5">
+    <header className="relative z-40 flex h-14 shrink-0 items-center gap-4 overflow-visible border-b border-hairline bg-canvas/70 px-4 backdrop-blur-md sm:gap-6 sm:px-6">
+      <Link href="/" className="flex shrink-0 items-center gap-2.5 rounded-md px-1 py-0.5 transition-colors hover:bg-hairline">
         <Logo />
         <span className="font-serif text-[21px] font-semibold tracking-tight text-ink">EvidenceLens</span>
       </Link>
@@ -46,11 +46,11 @@ export function TopBar({ caseId, cases, phase, origin, provenance, onAnalyze, on
 
       <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
         <span className="hidden text-xs text-muted xl:inline" aria-live="polite">{provenance}</span>
-        <button onClick={onHow} aria-label="How it works" className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 text-sm text-ink-2 transition-colors hover:bg-sunken">
+        <button onClick={onHow} aria-label="How it works" className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 text-sm text-ink-2 transition-colors hover:bg-hairline hover:text-ink">
           <HelpIcon className="h-4 w-4" /> <span className="hidden lg:inline">How it works</span>
         </button>
         <QueueMenu onComplete={onCaseReady} />
-        <Link href="/new" className="inline-flex h-9 items-center whitespace-nowrap rounded-md border border-hairline px-3 text-sm text-ink-2 transition-colors hover:bg-sunken">
+        <Link href="/new" className="inline-flex h-9 items-center whitespace-nowrap rounded-md border border-hairline px-3 text-sm text-ink-2 transition-colors hover:border-brass/50 hover:bg-hairline hover:text-ink">
           New case
         </Link>
         {!uploaded && (
@@ -88,7 +88,7 @@ export function MatterHeader({ caseId, fields, duration, phase, counts, total, f
 
       <div className="flex items-center gap-3">
         {loaded && filter && (
-          <button onClick={() => setFilter(null)} className="text-xs text-muted underline underline-offset-2 hover:text-ink">Show all {total}</button>
+          <button onClick={() => setFilter(null)} className="text-xs text-muted underline underline-offset-2 transition-colors hover:text-ink">Show all {total}</button>
         )}
         {!loaded ? (
           <span className="rounded-full border border-hairline px-3 py-1.5 text-xs text-muted">
@@ -101,7 +101,7 @@ export function MatterHeader({ caseId, fields, duration, phase, counts, total, f
               return (
                 <button key={s} disabled={!loaded} onClick={() => setFilter(active ? null : s)} aria-pressed={active}
                   title={loaded ? `Show only: ${STATUS[s].label}` : undefined}
-                  className={`flex items-baseline gap-2 px-3.5 py-2 transition-colors disabled:cursor-default ${i ? "border-l border-hairline" : ""} ${active ? STATUS[s].tint : loaded ? "hover:bg-sunken" : ""}`}>
+                  className={`flex items-baseline gap-2 px-3.5 py-2 transition-colors disabled:cursor-default ${i ? "border-l border-hairline" : ""} ${active ? STATUS[s].tint : loaded ? "hover:bg-hairline" : ""}`}>
                   <span className={`font-serif text-xl leading-none tabular-nums ${loaded ? (s === "potential_inconsistency" ? "text-review" : "text-ink") : "text-hairline"}`}>
                     {loaded ? counts[s] : "–"}
                   </span>
@@ -165,7 +165,7 @@ export function HowItWorks({ open, onClose }: { open: boolean; onClose: () => vo
             <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted">Method</p>
             <h2 className="mt-1 font-serif text-[26px] text-ink">How EvidenceLens works</h2>
           </div>
-          <button onClick={onClose} className="rounded-md p-2 text-muted hover:bg-sunken hover:text-ink" aria-label="Close">
+          <button onClick={onClose} className="rounded-md p-2 text-muted transition-colors hover:bg-hairline hover:text-ink" aria-label="Close">
             <CloseIcon />
           </button>
         </div>

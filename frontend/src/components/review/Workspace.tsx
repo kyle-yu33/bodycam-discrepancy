@@ -207,7 +207,7 @@ export function Workspace({ caseId }: { caseId: string }) {
       <MatterHeader caseId={caseId} fields={report.fields} duration={data?.duration_sec ?? null} phase={phase}
         counts={counts} total={results.length} filter={filter} setFilter={setFilter} />
 
-      <main className={`grid flex-1 gap-4 px-6 pb-6 xl:min-h-0 ${expanded ? "xl:grid-cols-[minmax(640px,2.7fr)_minmax(340px,1fr)]" : "xl:grid-cols-[minmax(280px,0.8fr)_minmax(580px,2.2fr)_minmax(330px,0.95fr)]"}`}>
+      <main className={`relative z-0 grid flex-1 gap-4 px-6 pb-6 xl:min-h-0 ${expanded ? "xl:grid-cols-[minmax(640px,2.7fr)_minmax(340px,1fr)]" : "xl:grid-cols-[minmax(280px,0.8fr)_minmax(580px,2.2fr)_minmax(330px,0.95fr)]"}`}>
         {!expanded && (
           <ReportPanel report={report} results={results} revealed={revealed} selectedId={selectedId}
             onSelect={select} filter={filter} view={view} setView={setView} />

@@ -2,6 +2,7 @@
 import os
 from pathlib import Path
 
+from .video import ensure_model_size
 from .gemini import MODEL, Gemini, video_part
 from .ledger import Claim, ClaimCheck, ClaimChecks, Claims, SecondLook
 
@@ -91,6 +92,7 @@ def extract(gemini: Gemini, report_text: str) -> list[Claim]:
 
 def check(gemini: Gemini, video: Path, claims: list[Claim], pose_text: str, duration: float,
           overlay: bool, segment_start: float | None = None, segment_end: float | None = None) -> list[ClaimCheck]:
+    ensure_model_size(video)
     listing = "\n".join(f"{c.id} [{c.claim_type}] {c.text}" for c in claims)
     prompt = CHECK_PROMPT.format(dur=duration, neutral=NEUTRAL, injection=INJECTION, observe=OBSERVE,
                                  overlay=OVERLAY_NOTE if overlay else "", pose=pose_text, claims=listing)
@@ -106,6 +108,7 @@ def check(gemini: Gemini, video: Path, claims: list[Claim], pose_text: str, dura
 def second_look(gemini: Gemini, window: Path, claim: Claim, start: float, end: float,
                 claim_start: float, claim_end: float) -> SecondLook:
     """claim_start/claim_end: the first pass's window, in original-video seconds."""
+    ensure_model_size(window)
     prompt = SECOND_LOOK_PROMPT.format(start=start, end=end, c0=claim_start - start, c1=claim_end - start,
                                        text=claim.text, observe=OBSERVE, neutral=NEUTRAL, injection=INJECTION)
     return gemini.generate([video_part(window, SECOND_LOOK_FPS), prompt], SecondLook, model=CLAIMS_MODEL)

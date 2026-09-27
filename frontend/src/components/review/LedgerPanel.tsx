@@ -76,7 +76,7 @@ export function LedgerPanel({ phase, step, results, selected, onSelect, onPlay, 
           {flagged.map((r) => (
             <li key={r.claim.id}>
               <button onClick={() => onSelect(r.claim.id)}
-                className="group flex w-full gap-3 rounded-lg border border-hairline bg-surface p-3.5 text-left transition-colors hover:border-review/30 hover:bg-review-bg/60">
+                className="group flex w-full gap-3 rounded-lg border border-hairline bg-surface p-3.5 text-left transition-colors hover:border-review/50 hover:bg-review-bg">
                 <span className="w-1 shrink-0 self-stretch rounded-full bg-review-bar" aria-hidden />
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center justify-between text-[11px] text-muted">
@@ -104,11 +104,11 @@ export function LedgerPanel({ phase, step, results, selected, onSelect, onPlay, 
           <Overline>Claim {index + 1} of {results.length} · {CLAIM_TYPE[r.claim.claim_type]}</Overline>
           <div className="flex gap-1">
             <button onClick={() => index > 0 && onSelect(results[index - 1].claim.id)} disabled={index <= 0}
-              className="rounded-md border border-hairline p-1.5 text-ink-2 transition-colors hover:bg-sunken disabled:opacity-30" aria-label="Previous claim">
+              className="rounded-md border border-hairline p-1.5 text-ink-2 transition-colors hover:border-brass/50 hover:bg-hairline hover:text-ink disabled:opacity-30" aria-label="Previous claim">
               <ChevronUp />
             </button>
             <button onClick={() => index < results.length - 1 && onSelect(results[index + 1].claim.id)} disabled={index >= results.length - 1}
-              className="rounded-md border border-hairline p-1.5 text-ink-2 transition-colors hover:bg-sunken disabled:opacity-30" aria-label="Next claim">
+              className="rounded-md border border-hairline p-1.5 text-ink-2 transition-colors hover:border-brass/50 hover:bg-hairline hover:text-ink disabled:opacity-30" aria-label="Next claim">
               <ChevronDown />
             </button>
           </div>
